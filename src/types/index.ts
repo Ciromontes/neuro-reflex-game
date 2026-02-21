@@ -1,3 +1,4 @@
+// Exportaciones principales
 export interface WordPair {
   target: string;
   antonym: string;
@@ -24,6 +25,11 @@ export interface Phase {
     medium: { speed: number; lives: number };
     hard: { speed: number; lives: number };
   };
+  difficultyConfig?: {
+    easy: { speed: number; name: string; color: string; livesForNext: number };
+    medium: { speed: number; name: string; color: string; livesForNext: number };
+    hard: { speed: number; name: string; color: string; livesForNext: number };
+  };
 }
 
 export interface GameState {
@@ -36,6 +42,8 @@ export interface GameState {
   studiedWords: string[];
   missedWords: WordPair[];
   isPaused: boolean;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  correctCount?: number;
 }
 
 export interface FallingWord {
@@ -56,3 +64,21 @@ export interface Feedback {
   text: string;
   points: string;
 }
+
+export interface Particle {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+export interface ConfettiPiece {
+  id: number;
+  x: number;
+  y: number;
+  color: string;
+  delay: number;
+}
+
+

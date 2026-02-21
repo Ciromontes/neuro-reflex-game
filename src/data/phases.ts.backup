@@ -1,5 +1,4 @@
-// IMPORTAR Phase desde types CORRECTAMENTE
-import type { Phase } from '../types/index';
+import type { Phase } from "../types";
 
 export const phases: Phase[] = [
   {
@@ -57,11 +56,6 @@ export const phases: Phase[] = [
       easy: { speed: 8000, lives: 5 },
       medium: { speed: 5500, lives: 5 },
       hard: { speed: 3500, lives: 5 }
-    },
-    difficultyConfig: {
-      easy: { speed: 8000, name: "FÁCIL", color: "#00ff87", livesForNext: 10 },
-      medium: { speed: 5500, name: "MEDIO", color: "#00d4ff", livesForNext: 15 },
-      hard: { speed: 3500, name: "DIFÍCIL", color: "#ff00ff", livesForNext: 20 }
     }
   },
   {
@@ -119,11 +113,6 @@ export const phases: Phase[] = [
       easy: { speed: 7500, lives: 5 },
       medium: { speed: 5000, lives: 5 },
       hard: { speed: 3000, lives: 5 }
-    },
-    difficultyConfig: {
-      easy: { speed: 7500, name: "FÁCIL", color: "#00d4ff", livesForNext: 10 },
-      medium: { speed: 5000, name: "MEDIO", color: "#ffd700", livesForNext: 15 },
-      hard: { speed: 3000, name: "DIFÍCIL", color: "#ff3d00", livesForNext: 20 }
     }
   },
   {
@@ -181,11 +170,6 @@ export const phases: Phase[] = [
       easy: { speed: 8500, lives: 5 },
       medium: { speed: 6000, lives: 5 },
       hard: { speed: 4000, lives: 5 }
-    },
-    difficultyConfig: {
-      easy: { speed: 8500, name: "FÁCIL", color: "#ff00ff", livesForNext: 10 },
-      medium: { speed: 6000, name: "MEDIO", color: "#ffd700", livesForNext: 15 },
-      hard: { speed: 4000, name: "DIFÍCIL", color: "#ff3d00", livesForNext: 20 }
     }
   }
 ];

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, Play, RotateCcw, Pause, X } from 'lucide-react';
+import { Volume2, Play, RotateCcw, Pause, X, Book } from 'lucide-react';
 import type { Phase } from '../../types';
 import { useGameLogic } from '../../hooks/useGameLogic';
 
@@ -22,12 +22,17 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
     feedback,
     particles,
     confetti,
+    studiedWords,
     isPaused,
     shakeScreen,
+    difficulty,
     handleWordClick,
+    startTraining,
     startGame,
     togglePause,
-    quitGame
+    quitGame,
+    resetGame,
+    difficultyConfig
   } = useGameLogic(phase, mode);
 
   // Si el estado es 'learning', mostramos la pantalla de aprendizaje
@@ -36,8 +41,9 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
       <div className="learning-screen">
         <div className="learning-title">NEURO-REFLEX</div>
         <div className="learning-subtitle">
-          📚 FASE DE APRENDIZAJE • Estudia estas {phase.wordPairs.length} palabras antes de comenzar
+          {phase.icon} FASE {phase.id}: {phase.title} • Estudia estas {phase.wordPairs.length} palabras antes de comenzar
         </div>
+        
         <div className="learning-list">
           {phase.wordPairs.map((word, idx) => (
             <div key={idx} className="learning-card">
@@ -47,17 +53,43 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
                 <span style={{color: '#00ff87'}}>{word.antonym}</span>
               </div>
               <div className="learning-spanish">{word.spanish}</div>
+              {word.type && (
+                <div style={{
+                  fontSize: '10px',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  textAlign: 'center',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  marginTop: '5px'
+                }}>
+                  {word.type}
+                </div>
+              )}
             </div>
           ))}
         </div>
+        
         <div style={{display: 'flex', gap: '15px', marginTop: '5px'}}>
-          <button className="btn btn-primary" onClick={startGame}>
+          <button className="btn btn-primary" onClick={() => startTraining()}>
             <Play size={22} />
-            {mode === 'training' ? 'MODO ENTRENAMIENTO' : `COMENZAR NIVEL ${mode.toUpperCase()}`}
+            MODO ENTRENAMIENTO
           </button>
+          
+          {mode === 'training' ? (
+            <button className="btn btn-primary" onClick={() => startGame('easy')}>
+              <Play size={22} />
+              EMPEZAR JUEGO (FÁCIL)
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={() => startGame(mode)}>
+              <Play size={22} />
+              {mode === 'easy' ? 'FÁCIL' : mode === 'medium' ? 'MEDIO' : 'DIFÍCIL'}
+            </button>
+          )}
+          
           <button className="btn btn-primary" onClick={onExit}>
             <X size={22} />
-            SALIR
+            VOLVER
           </button>
         </div>
       </div>
@@ -79,15 +111,62 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
             <div className="gameover-stat-value">{combo}</div>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={() => { /* restart logic */ }}>
-          <RotateCcw size={24} />
-          REINTENTAR
-        </button>
+        <div style={{display: 'flex', gap: '15px'}}>
+          <button className="btn btn-primary" onClick={resetGame}>
+            <RotateCcw size={24} />
+            REINTENTAR
+          </button>
+          <button className="btn btn-primary" onClick={onExit}>
+            <X size={24} />
+            VOLVER
+          </button>
+        </div>
       </div>
     );
   }
 
-  // Pantalla de juego principal
+  // Si el estado es 'victory', mostramos pantalla de victoria
+  if (gameState === 'victory') {
+    return (
+      <div className="gameover-screen">
+        <div className="gameover-title" style={{color: '#ffd700'}}>
+          🎉 ¡VICTORIA! 🎉
+        </div>
+        <div style={{
+          fontSize: '32px',
+          color: '#00ff87',
+          fontFamily: 'Orbitron, sans-serif',
+          fontWeight: 700,
+          marginBottom: '30px',
+          textAlign: 'center'
+        }}>
+          ¡YA DOMINAS {studiedWords.size} PALABRAS DE ESTA FASE!
+        </div>
+        <div className="gameover-stats">
+          <div className="gameover-stat">
+            <div className="gameover-stat-label">Puntuación Final</div>
+            <div className="gameover-stat-value">{score}</div>
+          </div>
+          <div className="gameover-stat">
+            <div className="gameover-stat-label">Palabras Dominadas</div>
+            <div className="gameover-stat-value">{studiedWords.size}</div>
+          </div>
+        </div>
+        <div style={{display: 'flex', gap: '15px'}}>
+          <button className="btn btn-primary" onClick={resetGame}>
+            <RotateCcw size={24} />
+            VOLVER A EMPEZAR
+          </button>
+          <button className="btn btn-primary" onClick={onExit}>
+            <Book size={24} />
+            OTRAS FASES
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Pantalla de juego principal (training, easy, medium, hard)
   return (
     <div className="game-container">
       <div className={`${shakeScreen ? 'screen-shake' : ''}`}>
@@ -104,7 +183,10 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
           <button className="control-btn" onClick={togglePause} title="Pausar">
             <Pause size={20} />
           </button>
-          <button className="control-btn" onClick={quitGame} title="Salir">
+          <button className="control-btn" onClick={() => {
+            quitGame();
+            onExit();
+          }} title="Salir">
             <X size={20} />
           </button>
         </div>
@@ -128,12 +210,23 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
                 ))}
               </div>
             </div>
-            <div className="stat-item">
-              <div className="stat-label">Nivel</div>
-              <div className="stat-value" style={{color: phase.color}}>
-                {mode.toUpperCase()}
+            
+            {/* Mostrar nivel según el modo */}
+            {gameState === 'training' ? (
+              <div className="stat-item">
+                <div className="stat-label">Modo</div>
+                <div className="stat-value" style={{color: '#00ff87'}}>
+                  PRÁCTICA
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="stat-item">
+                <div className="stat-label">Nivel</div>
+                <div className="stat-value" style={{color: difficultyConfig[difficulty].color}}>
+                  {difficultyConfig[difficulty].name}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -159,10 +252,20 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
                 Cargando palabras...
               </div>
             )}
+            
             {fallingWords.map((word) => {
-              const fallSpeed = phase.difficultyLevels[mode].speed;
+              // Determinar velocidad según modo y dificultad
+              let fallSpeed;
+              if (gameState === 'training') {
+                fallSpeed = difficultyConfig.easy.speed;
+              } else {
+                fallSpeed = difficultyConfig[difficulty].speed;
+              }
+              
+              // En modo training la respuesta correcta se ve verde
+              // En otros modos todas se ven iguales (blanco)
               const wordClass = word.isCorrect 
-                ? (mode === 'training' ? 'correct' : 'correct-hidden')
+                ? (gameState === 'training' ? 'correct' : 'correct-hidden')
                 : 'distractor';
               
               return (
@@ -192,9 +295,12 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
                 <Play size={24} />
                 CONTINUAR
               </button>
-              <button className="btn btn-primary" onClick={onExit}>
+              <button className="btn btn-primary" onClick={() => {
+                quitGame();
+                onExit();
+              }}>
                 <X size={24} />
-                SALIR
+                VOLVER
               </button>
             </div>
           </div>
@@ -218,7 +324,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
               top: `${particle.y}%`,
               '--vx': `${particle.vx}px`,
               '--vy': `${particle.vy}px`
-            }}
+            } as React.CSSProperties}
           />
         ))}
 
@@ -239,3 +345,4 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
     </div>
   );
 };
+

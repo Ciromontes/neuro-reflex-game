@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Phase, WordPair, FallingWord, Feedback, Particle, ConfettiPiece } from '../types';
 
 export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' | 'hard') => {
-  // Estados del juego
+  // Estados del juego - TODOS los estados del original
   const [gameState, setGameState] = useState<'learning' | 'training' | 'easy' | 'medium' | 'hard' | 'paused' | 'gameover' | 'victory'>('learning');
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(phase.difficultyLevels[mode].lives);
@@ -22,41 +22,17 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
 
   // Referencias
   const wordIdCounter = useRef(0);
-  const fallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallTimerRef = useRef<NodeJS.Timeout | null>(null);
   const wordQueueRef = useRef<number[]>([]);
   const availableWordsRef = useRef<WordPair[]>([]);
   const currentCycleRef = useRef<WordPair[]>([]);
 
-  // Refs para romper dependencias circulares entre callbacks
-  const nextWordRef = useRef<() => void>(() => {});
-  const handleMissedWordRef = useRef<() => void>(() => {});
-
-  // Refs para estado actual (evitar stale closures)
-  const gameStateRef = useRef(gameState);
-  const isPausedRef = useRef(isPaused);
-  const currentWordRef = useRef(currentWord);
-  const comboRef = useRef(combo);
-  const correctCountRef = useRef(correctCount);
-  const livesRef = useRef(lives);
-  const difficultyRef = useRef(difficulty);
-  const missedWordsRef = useRef(missedWords);
-
-  // Mantener refs sincronizadas con el estado
-  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
-  useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
-  useEffect(() => { currentWordRef.current = currentWord; }, [currentWord]);
-  useEffect(() => { comboRef.current = combo; }, [combo]);
-  useEffect(() => { correctCountRef.current = correctCount; }, [correctCount]);
-  useEffect(() => { livesRef.current = lives; }, [lives]);
-  useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
-  useEffect(() => { missedWordsRef.current = missedWords; }, [missedWords]);
-
-  // Configuración de dificultad memoizada
-  const difficultyConfig = useMemo(() => phase.difficultyConfig || {
+  // Configuración de dificultad (usar phase.difficultyConfig o valores por defecto)
+  const difficultyConfig = phase.difficultyConfig || {
     easy: { speed: 8000, name: "FÁCIL", color: "#00ff87", livesForNext: 10 },
     medium: { speed: 5500, name: "MEDIO", color: "#00d4ff", livesForNext: 15 },
     hard: { speed: 3500, name: "DIFÍCIL", color: "#ff00ff", livesForNext: 20 }
-  }, [phase.difficultyConfig]);
+  };
 
   // Inicializar ciclo de palabras sin repetición
   const initializeWordCycle = useCallback(() => {
@@ -106,7 +82,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     return words;
   }, [phase.wordPairs, phase.distractorWords]);
 
-  // Sintetizar voz
+  // Sintetizar voz (EXACTO AL ORIGINAL)
   const speakWord = useCallback((word: string, rate = 1) => {
     if (!soundEnabled || !window.speechSynthesis) return;
     
@@ -136,7 +112,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     }
   }, [soundEnabled]);
 
-  // Crear partículas
+  // Crear partículas (EXACTO AL ORIGINAL)
   const createParticles = useCallback((x: number, y: number) => {
     const newParticles: Particle[] = [];
     for (let i = 0; i < 20; i++) {
@@ -152,7 +128,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     setTimeout(() => setParticles([]), 1000);
   }, []);
 
-  // Crear confetti
+  // Crear confetti (EXACTO AL ORIGINAL)
   const createConfetti = useCallback(() => {
     const newConfetti: ConfettiPiece[] = [];
     for (let i = 0; i < 100; i++) {
@@ -168,112 +144,11 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     setTimeout(() => setConfetti([]), 5000);
   }, []);
 
-  // === SIGUIENTE PALABRA (usa refs para evitar dependencias circulares) ===
-  const nextWord = useCallback((): void => {
-    const gs = gameStateRef.current;
-    const mw = missedWordsRef.current;
-    let nextWordData: WordPair;
-    
-    // Sistema de repetición espaciada
-    if (gs !== 'training' && mw.length > 0 && wordQueueRef.current.length === 0) {
-      nextWordData = mw[0];
-      setMissedWords(prev => prev.slice(1));
-      wordQueueRef.current = [1, 2, 3, 4];
-    } else {
-      if (availableWordsRef.current.length === 0) {
-        initializeWordCycle();
-      }
-      nextWordData = availableWordsRef.current.shift()!;
-      if (wordQueueRef.current.length > 0) {
-        wordQueueRef.current.shift();
-      }
-    }
-    
-    if (!nextWordData) return;
-    
-    setCurrentWord(nextWordData);
-    
-    setTimeout(() => {
-      const words = generateFallingWords(nextWordData);
-      setFallingWords(words);
+  // Manejar click en palabra (CON TODA LA LÓGICA DE PUNTOS Y PROGRESIÓN)
+  const handleWordClick = useCallback((word: FallingWord, event: React.MouseEvent) => {
+    if (!['training', 'easy', 'medium', 'hard'].includes(gameState) || isPaused || !currentWord) return;
 
-      const d = difficultyRef.current;
-      let fallTime: number;
-      if (gameStateRef.current === 'training') {
-        fallTime = difficultyConfig.easy.speed;
-      } else {
-        fallTime = difficultyConfig[d].speed;
-      }
-      
-      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
-      fallTimerRef.current = setTimeout(() => {
-        handleMissedWordRef.current();
-      }, fallTime + 800);
-    }, 100);
-  }, [initializeWordCycle, generateFallingWords, difficultyConfig]);
-
-  // Mantener ref sincronizada
-  useEffect(() => { nextWordRef.current = nextWord; }, [nextWord]);
-
-  // === MANEJAR PALABRA PERDIDA ===
-  const handleMissedWord = useCallback((): void => {
-    const gs = gameStateRef.current;
-    const paused = isPausedRef.current;
-    const cw = currentWordRef.current;
-    
-    if (!['training', 'easy', 'medium', 'hard'].includes(gs) || paused || !cw) return;
-
-    setFallingWords([]);
-
-    setMissedWords(prev => [...prev, cw]);
-    setCombo(0);
-    
-    setLives(prev => {
-      const newLives = prev - 1;
-      
-      setShakeScreen(true);
-      setTimeout(() => setShakeScreen(false), 500);
-      
-      setFeedback({
-        type: 'missed',
-        text: `¡PERDISTE! Era: ${cw.antonym}`,
-        points: '-75'
-      });
-
-      setScore(s => Math.max(0, s - 75));
-      
-      if (newLives <= 0) {
-        setTimeout(() => {
-          setGameState('gameover');
-          setFallingWords([]);
-          if (fallTimerRef.current) {
-            clearTimeout(fallTimerRef.current);
-            fallTimerRef.current = null;
-          }
-        }, 1200);
-      } else {
-        setTimeout(() => {
-          setFeedback(null);
-          nextWordRef.current();
-        }, 1500);
-      }
-      
-      return newLives;
-    });
-  }, []);
-
-  // Mantener ref sincronizada
-  useEffect(() => { handleMissedWordRef.current = handleMissedWord; }, [handleMissedWord]);
-
-  // === MANEJAR CLICK EN PALABRA ===
-  const handleWordClick = useCallback((word: FallingWord, event: React.MouseEvent): void => {
-    const gs = gameStateRef.current;
-    const paused = isPausedRef.current;
-    const cw = currentWordRef.current;
-    
-    if (!['training', 'easy', 'medium', 'hard'].includes(gs) || paused || !cw) return;
-
-    // Limpiar timer inmediatamente
+    // CRÍTICO: Limpiar timer inmediatamente para evitar solapamientos
     if (fallTimerRef.current) {
       clearTimeout(fallTimerRef.current);
       fallTimerRef.current = null;
@@ -287,120 +162,203 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     const y = (rect.top + rect.height / 2) / window.innerHeight * 100;
 
     if (word.isCorrect) {
-      const currentCombo = comboRef.current;
-      const points = 100 + (currentCombo * 25);
+      const points = 100 + (combo * 25);
       setScore(s => s + points);
       setCombo(c => c + 1);
       createParticles(x, y);
       
-      setStudiedWords(prev => new Set([...prev, cw.target]));
+      setStudiedWords(prev => new Set([...prev, currentWord.target]));
       
-      const newCorrectCount = correctCountRef.current + 1;
+      const newCorrectCount = correctCount + 1;
       setCorrectCount(newCorrectCount);
       
-      // Sistema de vidas y progresión (SOLO EN MODOS NO-TRAINING)
-      if (gs !== 'training') {
+      // Sistema de vidas y progresión de niveles (SOLO EN MODOS NO-TRAINING)
+      if (gameState !== 'training') {
         if (newCorrectCount % 5 === 0) {
-          setLives(prev => {
-            const newLives = prev + 1;
-            const d = difficultyRef.current;
-            
-            if (d === 'easy' && newLives >= difficultyConfig.easy.livesForNext) {
+          const newLives = lives + 1;
+          setLives(newLives);
+          
+          // Progresión de niveles (FÁCIL → MEDIO → DIFÍCIL)
+          if (difficulty === 'easy' && newLives >= difficultyConfig.easy.livesForNext) {
+            setTimeout(() => {
+              setDifficulty('medium');
+              setFeedback({
+                type: 'levelup',
+                text: '🎉 ¡NIVEL MEDIO DESBLOQUEADO! 🎉',
+                points: 'Velocidad aumentada'
+              });
               setTimeout(() => {
-                setDifficulty('medium');
-                setFeedback({
-                  type: 'levelup',
-                  text: '🎉 ¡NIVEL MEDIO DESBLOQUEADO! 🎉',
-                  points: 'Velocidad aumentada'
-                });
-                setTimeout(() => {
-                  setFeedback(null);
-                  nextWordRef.current();
-                }, 2500);
-              }, 2000);
-              return newLives;
-            } else if (d === 'medium' && newLives >= difficultyConfig.medium.livesForNext) {
+                setFeedback(null);
+                nextWord();
+              }, 2500);
+            }, 2000);
+            return;
+          } else if (difficulty === 'medium' && newLives >= difficultyConfig.medium.livesForNext) {
+            setTimeout(() => {
+              setDifficulty('hard');
+              setFeedback({
+                type: 'levelup',
+                text: '🔥 ¡NIVEL DIFÍCIL DESBLOQUEADO! 🔥',
+                points: '¡Velocidad ultra rápida!'
+              });
               setTimeout(() => {
-                setDifficulty('hard');
-                setFeedback({
-                  type: 'levelup',
-                  text: '🔥 ¡NIVEL DIFÍCIL DESBLOQUEADO! 🔥',
-                  points: '¡Velocidad ultra rápida!'
-                });
-                setTimeout(() => {
-                  setFeedback(null);
-                  nextWordRef.current();
-                }, 2500);
-              }, 2000);
-              return newLives;
-            } else if (d === 'hard' && newLives >= difficultyConfig.hard.livesForNext) {
-              setTimeout(() => {
-                createConfetti();
-                setGameState('victory');
-              }, 2000);
-              return newLives;
-            }
-            
-            return newLives;
-          });
+                setFeedback(null);
+                nextWord();
+              }, 2500);
+            }, 2000);
+            return;
+          } else if (difficulty === 'hard' && newLives >= difficultyConfig.hard.livesForNext) {
+            setTimeout(() => {
+              createConfetti();
+              setGameState('victory');
+            }, 2000);
+            return;
+          }
         }
       }
       
-      speakWord(cw.target, 1.0);
+      speakWord(currentWord.target, 1.0);
       setTimeout(() => {
-        speakWord(cw.antonym, 1.0);
+        speakWord(currentWord.antonym, 1.0);
       }, 800);
       
       setFeedback({
         type: 'correct',
-        text: cw.spanish,
+        text: currentWord.spanish,
         points: `+${points}`
       });
       
       setTimeout(() => {
         setFeedback(null);
-        nextWordRef.current();
+        nextWord();
       }, 2000);
     } else {
-      setMissedWords(prev => [...prev, cw]);
+      setMissedWords(prev => [...prev, currentWord]);
       setCombo(0);
       
-      setLives(prev => {
-        const newLives = prev - 1;
-        
-        setShakeScreen(true);
-        setTimeout(() => setShakeScreen(false), 500);
-        
-        speakWord("Wrong", 0.8);
-        
-        setFeedback({
-          type: 'wrong',
-          text: `¡NO! La respuesta es: ${cw.antonym}`,
-          points: '-50'
-        });
-
-        setScore(s => Math.max(0, s - 50));
-        
-        if (newLives <= 0) {
-          setTimeout(() => {
-            setGameState('gameover');
-            setFallingWords([]);
-            if (fallTimerRef.current) {
-              clearTimeout(fallTimerRef.current);
-              fallTimerRef.current = null;
-            }
-          }, 1200);
-        } else {
-          setTimeout(() => {
-            setFeedback(null);
-            nextWordRef.current();
-          }, 1500);
-        }
-        
-        return newLives;
+      const newLives = lives - 1;
+      setLives(newLives);
+      
+      setShakeScreen(true);
+      setTimeout(() => setShakeScreen(false), 500);
+      
+      speakWord("Wrong", 0.8);
+      
+      setFeedback({
+        type: 'wrong',
+        text: `¡NO! La respuesta es: ${currentWord.antonym}`,
+        points: '-50'
       });
+
+      setScore(s => Math.max(0, s - 50));
+      
+      if (newLives <= 0) {
+        setTimeout(() => {
+          setGameState('gameover');
+          setFallingWords([]);
+          if (fallTimerRef.current) {
+            clearTimeout(fallTimerRef.current);
+            fallTimerRef.current = null;
+          }
+        }, 1200);
+      } else {
+        setTimeout(() => {
+          setFeedback(null);
+          nextWord();
+        }, 1500);
+      }
     }
-  }, [createParticles, createConfetti, speakWord, difficultyConfig]);
+  }, [gameState, isPaused, currentWord, combo, correctCount, lives, difficulty, createParticles, createConfetti, speakWord, nextWord, difficultyConfig]);
+
+  // Manejar palabra perdida (EXACTO AL ORIGINAL)
+  const handleMissedWord = useCallback(() => {
+    if (!['training', 'easy', 'medium', 'hard'].includes(gameState) || isPaused || !currentWord) return;
+
+    // Limpiar palabras inmediatamente
+    setFallingWords([]);
+
+    setMissedWords(prev => [...prev, currentWord]);
+    setCombo(0);
+    
+    const newLives = lives - 1;
+    setLives(newLives);
+    
+    setShakeScreen(true);
+    setTimeout(() => setShakeScreen(false), 500);
+    
+    setFeedback({
+      type: 'missed',
+      text: `¡PERDISTE! Era: ${currentWord.antonym}`,
+      points: '-75'
+    });
+
+    setScore(s => Math.max(0, s - 75));
+    
+    if (newLives <= 0) {
+      setTimeout(() => {
+        setGameState('gameover');
+        setFallingWords([]);
+        if (fallTimerRef.current) {
+          clearTimeout(fallTimerRef.current);
+          fallTimerRef.current = null;
+        }
+      }, 1200);
+    } else {
+      setTimeout(() => {
+        setFeedback(null);
+        nextWord();
+      }, 1500);
+    }
+  }, [gameState, isPaused, currentWord, lives, nextWord]);
+
+  // Siguiente palabra con repetición espaciada (EXACTO AL ORIGINAL)
+  const nextWord = useCallback(() => {
+    let nextWordData: WordPair;
+    
+    // Sistema de repetición espaciada: cada 4 palabras, insertar una palabra fallada
+    if (gameState !== 'training' && missedWords.length > 0 && wordQueueRef.current.length === 0) {
+      // Tomar la palabra más antigua que se falló
+      nextWordData = missedWords[0];
+      setMissedWords(prev => prev.slice(1));
+      
+      // Resetear contador de cola
+      wordQueueRef.current = [1, 2, 3, 4];
+    } else {
+      // Sacar la siguiente palabra de las disponibles
+      if (availableWordsRef.current.length === 0) {
+        // Si ya mostramos todas las palabras, reiniciar el ciclo
+        initializeWordCycle();
+      }
+      
+      // Tomar la primera palabra disponible
+      nextWordData = availableWordsRef.current.shift()!;
+      
+      // Decrementar contador de cola si existe
+      if (wordQueueRef.current.length > 0) {
+        wordQueueRef.current.shift();
+      }
+    }
+    
+    setCurrentWord(nextWordData);
+    
+    setTimeout(() => {
+      const words = generateFallingWords(nextWordData);
+      setFallingWords(words);
+
+      // Determinar velocidad según modo y dificultad
+      let fallTime;
+      if (gameState === 'training') {
+        fallTime = difficultyConfig.easy.speed;
+      } else {
+        fallTime = difficultyConfig[difficulty].speed;
+      }
+      
+      if (fallTimerRef.current) clearTimeout(fallTimerRef.current);
+      fallTimerRef.current = setTimeout(() => {
+        handleMissedWord();
+      }, fallTime + 800); // Aumentado el margen para mejor detección
+    }, 100);
+  }, [gameState, missedWords, initializeWordCycle, generateFallingWords, difficulty, difficultyConfig, handleMissedWord]);
 
   // Iniciar juego (para cada modo)
   const startGame = useCallback((gameMode: 'training' | 'easy' | 'medium' | 'hard') => {
@@ -414,15 +372,25 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     setCurrentWord(null);
     setFallingWords([]);
     setIsPaused(false);
-    setDifficulty('easy');
+    setDifficulty('easy'); // Resetear dificultad
     wordQueueRef.current = [];
     initializeWordCycle();
   }, [phase.difficultyLevels, initializeWordCycle]);
 
-  // Iniciar entrenamiento
+  // Iniciar entrenamiento (modo especial)
   const startTraining = useCallback(() => {
     startGame('training');
   }, [startGame]);
+
+  // Terminar juego
+  const endGame = useCallback(() => {
+    setGameState('gameover');
+    setFallingWords([]);
+    if (fallTimerRef.current) {
+      clearTimeout(fallTimerRef.current);
+      fallTimerRef.current = null;
+    }
+  }, []);
 
   // Reiniciar juego completo
   const resetGame = useCallback(() => {
@@ -443,7 +411,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     }
   }, []);
 
-  // Pre-cargar voces para iOS
+  // Pre-cargar voces para iOS (fix para problema de idioma)
   useEffect(() => {
     if (window.speechSynthesis) {
       const loadVoices = () => window.speechSynthesis.getVoices();
@@ -457,18 +425,18 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
   // Iniciar palabras cuando comienza el juego
   useEffect(() => {
     if (['training', 'easy', 'medium', 'hard'].includes(gameState) && !currentWord) {
+      // Inicializar el ciclo de palabras
       initializeWordCycle();
       
       const timer = setTimeout(() => {
         const firstWord = availableWordsRef.current[0];
-        if (!firstWord) return;
-        
         setCurrentWord(firstWord);
         
         const words = generateFallingWords(firstWord);
         setFallingWords(words);
 
-        let fallTime: number;
+        // Determinar velocidad según modo y dificultad
+        let fallTime;
         if (gameState === 'training') {
           fallTime = difficultyConfig.easy.speed;
         } else {
@@ -476,15 +444,15 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
         }
         
         fallTimerRef.current = setTimeout(() => {
-          handleMissedWordRef.current();
-        }, fallTime + 800);
+          handleMissedWord();
+        }, fallTime + 800); // Aumentado el margen de 500 a 800ms
       }, 100);
       
       return () => clearTimeout(timer);
     }
-  }, [gameState, currentWord, initializeWordCycle, generateFallingWords, difficulty, difficultyConfig]);
+  }, [gameState, currentWord, initializeWordCycle, generateFallingWords, difficulty, difficultyConfig, handleMissedWord]);
 
-  // Limpiar timers al desmontar
+  // Efecto para limpiar timers al desmontar
   useEffect(() => {
     return () => {
       if (fallTimerRef.current) {
