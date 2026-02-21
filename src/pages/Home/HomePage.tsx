@@ -205,7 +205,7 @@ const HomePage: React.FC = () => {
 
       <div className="phases-grid">
         {phases.map((phase) => (
-          <Link to={`/learn/${phase.id}`} key={phase.id} className="phase-card">
+          <Link to={`/setup/${phase.id}`} key={phase.id} className="phase-card">
             <div className="phase-card-header">
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <div className="phase-icon">{phase.icon}</div>
