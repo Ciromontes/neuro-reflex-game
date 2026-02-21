@@ -88,7 +88,7 @@ export interface PhaseProgress {
 
 export interface GameState {
   phaseId: number;
-  mode: 'training' | 'easy' | 'medium' | 'hard';
+  mode: 'training' | 'play' | 'easy' | 'medium' | 'hard';
   score: number;
   lives: number;
   combo: number;

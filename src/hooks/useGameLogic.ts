@@ -12,7 +12,7 @@ interface UseGameLogicOptions {
 
 export const useGameLogic = (
   phase: Phase,
-  mode: 'training' | 'easy' | 'medium' | 'hard',
+  mode: 'training' | 'play' | 'easy' | 'medium' | 'hard',
   options: UseGameLogicOptions = {}
 ) => {
   const { blockWords, speedMs: fixedSpeedMs, onBlockComplete } = options;
@@ -436,7 +436,7 @@ export const useGameLogic = (
   }, [createParticles, createConfetti, speakWord, difficultyConfig]);
 
   // Iniciar juego (para cada modo)
-  const startGame = useCallback((gameMode: 'training' | 'easy' | 'medium' | 'hard') => {
+  const startGame = useCallback((gameMode: 'training' | 'play' | 'easy' | 'medium' | 'hard') => {
     setGameState(gameMode);
     setScore(0);
     setLives(phase.difficultyLevels[gameMode].lives);

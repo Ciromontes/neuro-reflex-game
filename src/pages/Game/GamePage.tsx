@@ -27,6 +27,10 @@ const GamePage: React.FC = () => {
   const speedLevel = ([1, 2, 3, 4, 5].includes(speedParam) ? speedParam : 3) as SpeedLevel;
   const speedMs = SPEED_LEVELS.find(s => s.level === speedLevel)?.ms ?? 5000;
 
+  // Modo de juego desde query string: 'training' (con pistas) o 'play' (sin pistas)
+  const modeParam = searchParams.get('mode');
+  const blockGameMode: 'training' | 'play' = modeParam === 'play' ? 'play' : 'training';
+
   // Palabras del bloque (o todas si es modo legado)
   const blockWords = useMemo(() => {
     if (!phase) return [];
@@ -37,8 +41,8 @@ const GamePage: React.FC = () => {
   }, [phase, isBlockMode, blockIndex]);
 
   // Validar que el modo sea válido (modo legado)
-  const validMode = (m: string): m is 'training' | 'easy' | 'medium' | 'hard' => {
-    return ['training', 'easy', 'medium', 'hard'].includes(m);
+  const validMode = (m: string): m is 'training' | 'play' | 'easy' | 'medium' | 'hard' => {
+    return ['training', 'play', 'easy', 'medium', 'hard'].includes(m);
   };
 
   if (!phase) {
@@ -96,19 +100,19 @@ const GamePage: React.FC = () => {
 
   const handleNextBlock = () => {
     if (isBlockMode && blockIndex !== null) {
-      navigate(`/play/${phaseId}/block/${blockIndex + 1}?speed=${speedLevel}`);
+      navigate(`/play/${phaseId}/block/${blockIndex + 1}?speed=${speedLevel}&mode=${blockGameMode}`);
     }
   };
 
   const gameMode = validMode(mode || 'training')
-    ? (mode as 'training' | 'easy' | 'medium' | 'hard')
+    ? (mode as 'training' | 'play' | 'easy' | 'medium' | 'hard')
     : 'training';
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <GameEngine
         phase={phase}
-        mode={isBlockMode ? 'training' : gameMode}
+        mode={isBlockMode ? blockGameMode : gameMode}
         onExit={handleExit}
         blockWords={isBlockMode ? blockWords : undefined}
         speedMs={isBlockMode ? speedMs : undefined}

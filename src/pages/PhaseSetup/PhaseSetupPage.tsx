@@ -6,7 +6,9 @@ import { getBlockCount } from '../../utils/blockHelpers';
 import BlockSelector from '../../components/phase-selection/BlockSelector';
 import SpeedControl from '../../components/phase-selection/SpeedControl';
 import type { SpeedLevel } from '../../types';
-import { ArrowLeft, Play, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, Target, Gamepad2, Play } from 'lucide-react';
+
+type TabMode = 'review' | 'training' | 'play';
 
 const PhaseSetupPage: React.FC = () => {
   const { phaseId } = useParams<{ phaseId: string }>();
@@ -20,6 +22,7 @@ const PhaseSetupPage: React.FC = () => {
     [phase, totalPairs]
   );
 
+  const [activeTab, setActiveTab] = useState<TabMode>('review');
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
   const [speed, setSpeed] = useState<SpeedLevel>(progress?.speedLevel ?? 3);
 
@@ -41,12 +44,18 @@ const PhaseSetupPage: React.FC = () => {
 
   const handlePlay = () => {
     if (selectedBlock === null) return;
-    // Navigate to the game with block index and speed encoded in query/route
-    navigate(`/play/${phase.id}/block/${selectedBlock}?speed=${speed}`);
+    const modeParam = activeTab === 'training' ? 'training' : 'play';
+    navigate(`/play/${phase.id}/block/${selectedBlock}?speed=${speed}&mode=${modeParam}`);
   };
 
   const completedCount = progress.blocks.filter((b) => b.completed).length;
   const totalBlocks = getBlockCount(phase);
+
+  const tabs: { key: TabMode; icon: React.ReactNode; label: string; desc: string }[] = [
+    { key: 'review', icon: <BookOpen size={20} />, label: 'REPASAR', desc: 'Revisa las palabras' },
+    { key: 'training', icon: <Target size={20} />, label: 'ENTRENAMIENTO', desc: 'Con pistas en verde' },
+    { key: 'play', icon: <Gamepad2 size={20} />, label: 'JUGAR', desc: 'Sin pistas' },
+  ];
 
   return (
     <div className="setup-page">
@@ -54,10 +63,9 @@ const PhaseSetupPage: React.FC = () => {
 
       {/* Top bar */}
       <div className="setup-page__topbar">
-        <Link to={`/learn/${phase.id}`} className="setup-page__back">
-          <ArrowLeft size={20} /> Volver
+        <Link to="/" className="setup-page__back">
+          <ArrowLeft size={20} /> Inicio
         </Link>
-        <Link to="/" className="setup-page__home">INICIO</Link>
       </div>
 
       {/* Header */}
@@ -82,34 +90,91 @@ const PhaseSetupPage: React.FC = () => {
         </span>
       </div>
 
-      {/* Block Selector */}
-      <BlockSelector
-        phase={phase}
-        blocks={progress.blocks}
-        selectedBlock={selectedBlock}
-        onSelectBlock={setSelectedBlock}
-      />
+      {/* ======== 3 TABS ======== */}
+      <div className="setup-tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={`setup-tabs__btn ${activeTab === tab.key ? 'setup-tabs__btn--active' : ''} setup-tabs__btn--${tab.key}`}
+            onClick={() => {
+              setActiveTab(tab.key);
+              setSelectedBlock(null);
+            }}
+          >
+            <span className="setup-tabs__icon">{tab.icon}</span>
+            <span className="setup-tabs__label">{tab.label}</span>
+            <span className="setup-tabs__desc">{tab.desc}</span>
+          </button>
+        ))}
+      </div>
 
-      {/* Speed Control */}
-      <SpeedControl value={speed} onChange={handleSpeedChange} />
+      {/* ======== TAB CONTENT ======== */}
+      <div className="setup-tab-content">
+        {/* --- REPASAR --- */}
+        {activeTab === 'review' && (
+          <div className="review-grid">
+            <p className="review-grid__hint">
+              📖 Repasa todas las palabras de esta fase antes de entrenar
+            </p>
+            <div className="review-grid__cards">
+              {phase.wordPairs.map((wp, i) => (
+                <div key={i} className="review-card">
+                  <div className="review-card__target">{wp.target}</div>
+                  {wp.targetIpa && (
+                    <div className="review-card__ipa">{wp.targetIpa}</div>
+                  )}
+                  <div className="review-card__divider">↔</div>
+                  <div className="review-card__antonym">{wp.antonym}</div>
+                  {wp.antonymIpa && (
+                    <div className="review-card__ipa">{wp.antonymIpa}</div>
+                  )}
+                  <div className="review-card__spanish">{wp.spanish}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* Action buttons */}
-      <div className="setup-page__actions">
-        <button
-          className="setup-page__btn-play"
-          disabled={selectedBlock === null}
-          onClick={handlePlay}
-        >
-          <Play size={22} />
-          {selectedBlock !== null
-            ? `JUGAR BLOQUE ${selectedBlock + 1}`
-            : 'SELECCIONA UN BLOQUE'}
-        </button>
+        {/* --- ENTRENAMIENTO / JUGAR --- */}
+        {(activeTab === 'training' || activeTab === 'play') && (
+          <>
+            {activeTab === 'training' && (
+              <p className="setup-mode-hint setup-mode-hint--training">
+                🎯 La respuesta correcta se muestra en <strong>verde</strong> para ayudarte a aprender
+              </p>
+            )}
+            {activeTab === 'play' && (
+              <p className="setup-mode-hint setup-mode-hint--play">
+                🎮 Pon a prueba tu memoria — sin pistas, sin ayuda
+              </p>
+            )}
 
-        <Link to={`/learn/${phase.id}`} className="setup-page__btn-learn">
-          <BookOpen size={18} />
-          ESTUDIAR VOCABULARIO
-        </Link>
+            {/* Block Selector */}
+            <BlockSelector
+              phase={phase}
+              blocks={progress.blocks}
+              selectedBlock={selectedBlock}
+              onSelectBlock={setSelectedBlock}
+            />
+
+            {/* Speed Control */}
+            <SpeedControl value={speed} onChange={handleSpeedChange} />
+
+            {/* Action button */}
+            <div className="setup-page__actions">
+              <button
+                className={`setup-page__btn-play ${activeTab === 'training' ? 'setup-page__btn-play--training' : 'setup-page__btn-play--play'}`}
+                disabled={selectedBlock === null}
+                onClick={handlePlay}
+              >
+                <Play size={22} />
+                {selectedBlock !== null
+                  ? `${activeTab === 'training' ? 'ENTRENAR' : 'JUGAR'} BLOQUE ${selectedBlock + 1}`
+                  : 'SELECCIONA UN BLOQUE'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -226,7 +291,162 @@ const setupStyles = `
 }
 
 /* ============================================================
-   BLOCK SELECTOR
+   TABS — 3 mode buttons
+   ============================================================ */
+.setup-tabs {
+  display: flex;
+  gap: 12px;
+  max-width: 900px;
+  margin: 0 auto 28px;
+}
+.setup-tabs__btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  color: rgba(255,255,255,0.5);
+  font-family: 'Space Mono', monospace;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.setup-tabs__btn:hover {
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.8);
+}
+
+/* Active states per tab type */
+.setup-tabs__btn--active.setup-tabs__btn--review {
+  border-color: #00d4ff;
+  background: rgba(0,212,255,0.12);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(0,212,255,0.2);
+}
+.setup-tabs__btn--active.setup-tabs__btn--training {
+  border-color: #00ff87;
+  background: rgba(0,255,135,0.12);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(0,255,135,0.2);
+}
+.setup-tabs__btn--active.setup-tabs__btn--play {
+  border-color: #ff6b35;
+  background: rgba(255,107,53,0.12);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(255,107,53,0.2);
+}
+
+.setup-tabs__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-tabs__label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.setup-tabs__desc {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+/* ============================================================
+   TAB CONTENT
+   ============================================================ */
+.setup-tab-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Mode hint banner */
+.setup-mode-hint {
+  text-align: center;
+  font-size: 14px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+.setup-mode-hint--training {
+  background: rgba(0,255,135,0.08);
+  border: 1px solid rgba(0,255,135,0.2);
+  color: rgba(255,255,255,0.8);
+}
+.setup-mode-hint--training strong {
+  color: #00ff87;
+}
+.setup-mode-hint--play {
+  background: rgba(255,107,53,0.08);
+  border: 1px solid rgba(255,107,53,0.2);
+  color: rgba(255,255,255,0.8);
+}
+
+/* ============================================================
+   REVIEW GRID (Repasar tab)
+   ============================================================ */
+.review-grid__hint {
+  text-align: center;
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 20px;
+}
+.review-grid__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.review-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+  transition: all 0.3s;
+}
+.review-card:hover {
+  border-color: rgba(0,212,255,0.4);
+  background: rgba(0,212,255,0.06);
+  transform: translateY(-2px);
+}
+.review-card__target {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.review-card__ipa {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+.review-card__divider {
+  font-size: 12px;
+  color: rgba(0,255,135,0.5);
+  margin: 4px 0;
+}
+.review-card__antonym {
+  font-size: 14px;
+  font-weight: 700;
+  color: #00ff87;
+  margin-bottom: 2px;
+}
+.review-card__spanish {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* ============================================================
+   BLOCK SELECTOR (reused)
    ============================================================ */
 .block-selector {
   max-width: 900px;
@@ -244,7 +464,6 @@ const setupStyles = `
   color: rgba(255,255,255,0.4);
   margin-bottom: 18px;
 }
-
 .block-selector__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -283,7 +502,6 @@ const setupStyles = `
   box-shadow: 0 0 20px rgba(0,255,135,0.25);
   transform: translateY(-4px);
 }
-
 .block-card__header {
   display: flex;
   justify-content: space-between;
@@ -302,7 +520,6 @@ const setupStyles = `
 .block-card__check {
   font-size: 16px;
 }
-
 .block-card__words {
   display: flex;
   flex-direction: column;
@@ -319,7 +536,6 @@ const setupStyles = `
 .block-card--selected .block-card__word {
   color: rgba(255,255,255,0.8);
 }
-
 .block-card__score {
   font-size: 12px;
   color: #ffd700;
@@ -332,7 +548,7 @@ const setupStyles = `
 }
 
 /* ============================================================
-   SPEED CONTROL
+   SPEED CONTROL (reused)
    ============================================================ */
 .speed-control {
   max-width: 900px;
@@ -345,12 +561,10 @@ const setupStyles = `
   color: rgba(255,255,255,0.7);
   margin-bottom: 14px;
 }
-
 .speed-control__track {
   display: flex;
   gap: 10px;
 }
-
 .speed-control__btn {
   flex: 1;
   display: flex;
@@ -377,7 +591,6 @@ const setupStyles = `
   color: #fff;
   box-shadow: 0 0 16px rgba(0,212,255,0.25);
 }
-
 .speed-control__level {
   font-family: 'Orbitron', sans-serif;
   font-size: 22px;
@@ -408,13 +621,11 @@ const setupStyles = `
   align-items: center;
   gap: 16px;
 }
-
 .setup-page__btn-play {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 16px 40px;
-  background: linear-gradient(135deg, #00ff87, #00d4ff);
   border: none;
   border-radius: 50px;
   color: #0a0e27;
@@ -425,6 +636,12 @@ const setupStyles = `
   transition: all 0.3s;
   letter-spacing: 1px;
 }
+.setup-page__btn-play--training {
+  background: linear-gradient(135deg, #00ff87, #00d4ff);
+}
+.setup-page__btn-play--play {
+  background: linear-gradient(135deg, #ff6b35, #ff9a56);
+}
 .setup-page__btn-play:not(:disabled):hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 30px rgba(0,255,135,0.4);
@@ -432,33 +649,27 @@ const setupStyles = `
 .setup-page__btn-play:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.setup-page__btn-learn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: transparent;
-  border: 2px solid rgba(255,255,255,0.2);
-  border-radius: 50px;
-  color: rgba(255,255,255,0.6);
-  font-family: 'Orbitron', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: all 0.3s;
-  letter-spacing: 1px;
-}
-.setup-page__btn-learn:hover {
-  border-color: rgba(0,255,135,0.4);
-  color: #00ff87;
+  background: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.4);
 }
 
 /* ======== RESPONSIVE ======== */
 @media (max-width: 600px) {
   .setup-page__title {
     font-size: 24px;
+  }
+  .setup-tabs {
+    gap: 8px;
+  }
+  .setup-tabs__btn {
+    padding: 12px 6px;
+  }
+  .setup-tabs__label {
+    font-size: 10px;
+  }
+  .review-grid__cards {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
   }
   .block-selector__grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

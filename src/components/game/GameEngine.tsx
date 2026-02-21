@@ -6,7 +6,7 @@ import { BlockResults } from './BlockResults';
 
 interface GameEngineProps {
   phase: Phase;
-  mode: 'training' | 'easy' | 'medium' | 'hard';
+  mode: 'training' | 'play' | 'easy' | 'medium' | 'hard';
   onExit: () => void;
   /** Subset of words (a single block). Falls back to full phase if omitted */
   blockWords?: WordPair[];
