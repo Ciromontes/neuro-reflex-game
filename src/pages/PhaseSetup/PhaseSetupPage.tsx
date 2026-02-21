@@ -189,12 +189,13 @@ const setupStyles = `
 /* ======== PAGE ======== */
 .setup-page {
   width: 100vw;
-  min-height: 100vh;
+  height: 100vh;
   background: linear-gradient(135deg, #0a0e27 0%, #1a1d3d 50%, #0f1428 100%);
   font-family: 'Space Mono', monospace;
   color: #fff;
   padding: 30px 20px 60px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .setup-page--error {
   display: flex;

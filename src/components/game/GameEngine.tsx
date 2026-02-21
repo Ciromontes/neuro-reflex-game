@@ -111,27 +111,44 @@ export const GameEngine: React.FC<GameEngineProps> = ({
         </div>
         
         <div style={{display: 'flex', gap: '15px', marginTop: '5px'}}>
-          <button className="btn btn-primary" onClick={() => startTraining()}>
-            <Play size={22} />
-            MODO ENTRENAMIENTO
-          </button>
-          
-          {mode === 'training' ? (
-            <button className="btn btn-primary" onClick={() => startGame('easy')}>
-              <Play size={22} />
-              EMPEZAR JUEGO (FÁCIL)
-            </button>
+          {isBlockMode ? (
+            /* Block mode: single clear start button */
+            <>
+              <button className="btn btn-primary" onClick={() => startGame(mode === 'play' ? 'easy' : 'training')}>
+                <Play size={22} />
+                {mode === 'play' ? '¡JUGAR!' : '¡ENTRENAR!'}
+              </button>
+              <button className="btn btn-primary" onClick={onExit}>
+                <X size={22} />
+                VOLVER
+              </button>
+            </>
           ) : (
-            <button className="btn btn-primary" onClick={() => startGame(mode)}>
-              <Play size={22} />
-              {mode === 'easy' ? 'FÁCIL' : mode === 'medium' ? 'MEDIO' : 'DIFÍCIL'}
-            </button>
+            /* Legacy mode: full button set */
+            <>
+              <button className="btn btn-primary" onClick={() => startTraining()}>
+                <Play size={22} />
+                MODO ENTRENAMIENTO
+              </button>
+              
+              {mode === 'training' ? (
+                <button className="btn btn-primary" onClick={() => startGame('easy')}>
+                  <Play size={22} />
+                  EMPEZAR JUEGO (FÁCIL)
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={() => startGame(mode)}>
+                  <Play size={22} />
+                  {mode === 'easy' ? 'FÁCIL' : mode === 'medium' ? 'MEDIO' : 'DIFÍCIL'}
+                </button>
+              )}
+              
+              <button className="btn btn-primary" onClick={onExit}>
+                <X size={22} />
+                VOLVER
+              </button>
+            </>
           )}
-          
-          <button className="btn btn-primary" onClick={onExit}>
-            <X size={22} />
-            VOLVER
-          </button>
         </div>
       </div>
     );
