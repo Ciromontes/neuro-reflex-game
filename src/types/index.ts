@@ -117,6 +117,8 @@ export interface Feedback {
   type: 'correct' | 'wrong' | 'missed' | 'levelup';
   text: string;
   points: string;
+  /** Optional IPA transcription shown smaller below text */
+  ipa?: string;
 }
 
 export interface Particle {

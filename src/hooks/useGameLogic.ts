@@ -264,10 +264,9 @@ export const useGameLogic = (
       
       setFeedback({
         type: 'missed',
-        text: cw.antonymIpa
-          ? `\u00a1PERDISTE! Era: ${cw.antonym} ${cw.antonymIpa}`
-          : `\u00a1PERDISTE! Era: ${cw.antonym}`,
-        points: '-75'
+        text: `\u00a1PERDISTE! Era: ${cw.antonym}`,
+        points: '-75',
+        ipa: cw.antonymIpa || undefined
       });
 
       setScore(s => Math.max(0, s - 75));
@@ -385,10 +384,9 @@ export const useGameLogic = (
       
       setFeedback({
         type: 'correct',
-        text: cw.antonymIpa
-          ? `${cw.spanish}  \u2014  ${cw.target} ${cw.targetIpa || ''} \u2194 ${cw.antonym} ${cw.antonymIpa}`
-          : cw.spanish,
-        points: `+${points}`
+        text: cw.antonym,
+        points: `+${points}`,
+        ipa: cw.antonymIpa || undefined
       });
       
       setTimeout(() => {
@@ -409,10 +407,9 @@ export const useGameLogic = (
         
         setFeedback({
           type: 'wrong',
-          text: cw.antonymIpa
-            ? `\u00a1NO! La respuesta es: ${cw.antonym} ${cw.antonymIpa}`
-            : `\u00a1NO! La respuesta es: ${cw.antonym}`,
-          points: '-50'
+          text: `\u00a1NO! Era: ${cw.antonym}`,
+          points: '-50',
+          ipa: cw.antonymIpa || undefined
         });
 
         setScore(s => Math.max(0, s - 50));

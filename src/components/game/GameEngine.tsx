@@ -348,6 +348,9 @@ export const GameEngine: React.FC<GameEngineProps> = ({
         {feedback && (
           <div className={`feedback ${feedback.type}`}>
             <div className="feedback-text">{feedback.text}</div>
+            {feedback.ipa && (
+              <div className="feedback-ipa">{feedback.ipa}</div>
+            )}
             <div className="feedback-points">{feedback.points}</div>
           </div>
         )}
