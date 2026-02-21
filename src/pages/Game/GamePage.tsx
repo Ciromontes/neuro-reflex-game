@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { GameEngine } from '../../components/game';
 import { getPhaseById } from '../../data/phases';
-import { getBlockWords } from '../../utils/blockHelpers';
+import { getBlockWords, getBlockCount } from '../../utils/blockHelpers';
 import { completeBlock } from '../../utils/progressService';
 import { SPEED_LEVELS } from '../../types';
 import type { SpeedLevel } from '../../types';
@@ -91,6 +91,15 @@ const GamePage: React.FC = () => {
     }
   };
 
+  const totalBlocks = getBlockCount(phase);
+  const hasNextBlock = isBlockMode && blockIndex !== null && blockIndex < totalBlocks - 1;
+
+  const handleNextBlock = () => {
+    if (isBlockMode && blockIndex !== null) {
+      navigate(`/play/${phaseId}/block/${blockIndex + 1}?speed=${speedLevel}`);
+    }
+  };
+
   const gameMode = validMode(mode || 'training')
     ? (mode as 'training' | 'easy' | 'medium' | 'hard')
     : 'training';
@@ -105,6 +114,7 @@ const GamePage: React.FC = () => {
         speedMs={isBlockMode ? speedMs : undefined}
         blockIndex={blockIndex ?? undefined}
         onBlockComplete={isBlockMode ? handleBlockComplete : undefined}
+        onNextBlock={hasNextBlock ? handleNextBlock : undefined}
       />
     </div>
   );

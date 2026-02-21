@@ -2,6 +2,7 @@ import React from 'react';
 import { Volume2, Play, RotateCcw, Pause, X, Book } from 'lucide-react';
 import type { Phase, WordPair } from '../../types';
 import { useGameLogic } from '../../hooks/useGameLogic';
+import { BlockResults } from './BlockResults';
 
 interface GameEngineProps {
   phase: Phase;
@@ -15,6 +16,8 @@ interface GameEngineProps {
   blockIndex?: number;
   /** Called when the player wins with the final score */
   onBlockComplete?: (score: number) => void;
+  /** Navigate to the next block (only provided if a next block exists) */
+  onNextBlock?: () => void;
 }
 
 export const GameEngine: React.FC<GameEngineProps> = ({
@@ -24,7 +27,8 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   blockWords,
   speedMs,
   blockIndex,
-  onBlockComplete
+  onBlockComplete,
+  onNextBlock
 }) => {
   const {
     gameState,
@@ -39,6 +43,8 @@ export const GameEngine: React.FC<GameEngineProps> = ({
     particles,
     confetti,
     studiedWords,
+    missedWords,
+    correctCount,
     isPaused,
     shakeScreen,
     difficulty,
@@ -54,6 +60,8 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   // Words to display on the learning screen
   const displayWords = blockWords && blockWords.length > 0 ? blockWords : phase.wordPairs;
   const blockLabel = blockIndex != null ? ` • Bloque ${blockIndex + 1}` : '';
+
+  const isBlockMode = blockIndex != null && blockWords && blockWords.length > 0;
 
   // Si el estado es 'learning', mostramos la pantalla de aprendizaje
   if (gameState === 'learning') {
@@ -131,6 +139,20 @@ export const GameEngine: React.FC<GameEngineProps> = ({
 
   // Si el estado es 'gameover', mostramos pantalla de fin de juego
   if (gameState === 'gameover') {
+    if (isBlockMode) {
+      return (
+        <BlockResults
+          victory={false}
+          blockIndex={blockIndex}
+          blockWords={blockWords}
+          studiedWords={studiedWords}
+          score={score}
+          correctCount={correctCount}
+          onRetry={resetGame}
+          onExit={onExit}
+        />
+      );
+    }
     return (
       <div className="gameover-screen">
         <div className="gameover-title">MISIÓN TERMINADA</div>
@@ -160,6 +182,21 @@ export const GameEngine: React.FC<GameEngineProps> = ({
 
   // Si el estado es 'victory', mostramos pantalla de victoria
   if (gameState === 'victory') {
+    if (isBlockMode) {
+      return (
+        <BlockResults
+          victory={true}
+          blockIndex={blockIndex}
+          blockWords={blockWords}
+          studiedWords={studiedWords}
+          score={score}
+          correctCount={correctCount}
+          onRetry={resetGame}
+          onNextBlock={onNextBlock}
+          onExit={onExit}
+        />
+      );
+    }
     return (
       <div className="gameover-screen">
         <div className="gameover-title" style={{color: '#ffd700'}}>

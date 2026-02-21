@@ -715,3 +715,179 @@ body {
     padding: 10px 25px;
   }
 }
+
+/* ============================================================
+   Block Results Screen
+   ============================================================ */
+
+.block-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 30px 20px 40px;
+  overflow-y: auto;
+}
+
+.block-results-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.block-results-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.block-results-title.victory {
+  color: #ffd700;
+  text-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+}
+
+.block-results-title.gameover {
+  color: #ff3d00;
+  text-shadow: 0 0 30px rgba(255, 61, 0, 0.5);
+}
+
+.block-results-subtitle {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+/* Stats row */
+.block-results-stats {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 24px;
+}
+
+.block-results-stat {
+  text-align: center;
+}
+
+.block-results-stat-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #00ff87;
+}
+
+.block-results-stat-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+/* Word list */
+.block-results-words {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 440px;
+  margin-bottom: 20px;
+}
+
+.block-results-word {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+}
+
+.block-results-word.correct {
+  border-color: rgba(0, 255, 135, 0.2);
+}
+
+.block-results-word.missed {
+  border-color: rgba(255, 61, 0, 0.25);
+  background: rgba(255, 61, 0, 0.06);
+}
+
+.block-results-word-icon {
+  flex-shrink: 0;
+}
+
+.block-results-word-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.block-results-word-target {
+  color: #fff;
+}
+
+.block-results-word-arrow {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+}
+
+.block-results-word-antonym {
+  color: #00ff87;
+}
+
+.block-results-word.missed .block-results-word-antonym {
+  color: #ff3d00;
+}
+
+.block-results-word-ipa {
+  width: 100%;
+  padding-left: 28px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Segoe UI', 'Noto Sans', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+/* Tip */
+.block-results-tip {
+  font-size: 14px;
+  color: rgba(255, 215, 0, 0.8);
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 10px 20px;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 215, 0, 0.05);
+}
+
+/* Actions */
+.block-results-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+@media (max-width: 600px) {
+  .block-results-title {
+    font-size: 24px;
+  }
+
+  .block-results-stats {
+    gap: 20px;
+  }
+
+  .block-results-stat-value {
+    font-size: 24px;
+  }
+
+  .block-results-word-pair {
+    font-size: 13px;
+  }
+}
