@@ -16,11 +16,6 @@ const BlockSelector: React.FC<BlockSelectorProps> = ({
   selectedBlock,
   onSelectBlock,
 }) => {
-  const isUnlocked = (index: number) => {
-    if (index === 0) return true;
-    return blocks[index - 1]?.completed ?? false;
-  };
-
   return (
     <div className="block-selector">
       <h3 className="block-selector__title">SELECCIONA UN BLOQUE</h3>
@@ -30,7 +25,6 @@ const BlockSelector: React.FC<BlockSelectorProps> = ({
 
       <div className="block-selector__grid">
         {blocks.map((block, index) => {
-          const unlocked = isUnlocked(index);
           const words = getBlockWords(phase, index);
           const isSelected = selectedBlock === index;
 
@@ -39,19 +33,18 @@ const BlockSelector: React.FC<BlockSelectorProps> = ({
               key={index}
               className={[
                 'block-card',
-                unlocked ? 'block-card--unlocked' : 'block-card--locked',
+                'block-card--unlocked',
                 block.completed ? 'block-card--completed' : '',
                 isSelected ? 'block-card--selected' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              disabled={!unlocked}
               onClick={() => onSelectBlock(index)}
             >
               {/* Header */}
               <div className="block-card__header">
                 <span className="block-card__number">
-                  {unlocked ? `B${index + 1}` : '🔒'}
+                  {`B${index + 1}`}
                 </span>
                 {block.completed && <span className="block-card__check">✅</span>}
               </div>
@@ -60,7 +53,7 @@ const BlockSelector: React.FC<BlockSelectorProps> = ({
               <div className="block-card__words">
                 {words.map((w, i) => (
                   <span key={i} className="block-card__word">
-                    {unlocked ? w.target : '???'}
+                    {w.target}
                   </span>
                 ))}
               </div>

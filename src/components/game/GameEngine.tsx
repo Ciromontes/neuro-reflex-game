@@ -1,15 +1,31 @@
 import React from 'react';
 import { Volume2, Play, RotateCcw, Pause, X, Book } from 'lucide-react';
-import type { Phase } from '../../types';
+import type { Phase, WordPair } from '../../types';
 import { useGameLogic } from '../../hooks/useGameLogic';
 
 interface GameEngineProps {
   phase: Phase;
   mode: 'training' | 'easy' | 'medium' | 'hard';
   onExit: () => void;
+  /** Subset of words (a single block). Falls back to full phase if omitted */
+  blockWords?: WordPair[];
+  /** Fixed fall speed in ms (from SpeedControl) */
+  speedMs?: number;
+  /** Current block index (0-based), for display purposes */
+  blockIndex?: number;
+  /** Called when the player wins with the final score */
+  onBlockComplete?: (score: number) => void;
 }
 
-export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) => {
+export const GameEngine: React.FC<GameEngineProps> = ({
+  phase,
+  mode,
+  onExit,
+  blockWords,
+  speedMs,
+  blockIndex,
+  onBlockComplete
+}) => {
   const {
     gameState,
     score,
@@ -33,7 +49,11 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
     quitGame,
     resetGame,
     difficultyConfig
-  } = useGameLogic(phase, mode);
+  } = useGameLogic(phase, mode, { blockWords, speedMs, onBlockComplete });
+
+  // Words to display on the learning screen
+  const displayWords = blockWords && blockWords.length > 0 ? blockWords : phase.wordPairs;
+  const blockLabel = blockIndex != null ? ` • Bloque ${blockIndex + 1}` : '';
 
   // Si el estado es 'learning', mostramos la pantalla de aprendizaje
   if (gameState === 'learning') {
@@ -41,17 +61,30 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
       <div className="learning-screen">
         <div className="learning-title">NEURO-REFLEX</div>
         <div className="learning-subtitle">
-          {phase.icon} FASE {phase.id}: {phase.title} • Estudia estas {phase.wordPairs.length} palabras antes de comenzar
+          {phase.icon} FASE {phase.id}: {phase.title}{blockLabel} • Estudia estas {displayWords.length} palabras antes de comenzar
         </div>
         
         <div className="learning-list">
-          {phase.wordPairs.map((word, idx) => (
+          {displayWords.map((word, idx) => (
             <div key={idx} className="learning-card">
               <div className="learning-pair">
                 <span>{word.target}</span>
                 <span style={{color: '#00ff87', fontSize: '12px'}}>↔</span>
                 <span style={{color: '#00ff87'}}>{word.antonym}</span>
               </div>
+              {(word.targetIpa || word.antonymIpa) && (
+                <div style={{
+                  fontSize: '11px',
+                  color: 'rgba(255, 255, 255, 0.45)',
+                  textAlign: 'center',
+                  fontFamily: 'monospace',
+                  marginTop: '2px'
+                }}>
+                  {word.targetIpa && <span>{word.targetIpa}</span>}
+                  {word.targetIpa && word.antonymIpa && <span> — </span>}
+                  {word.antonymIpa && <span>{word.antonymIpa}</span>}
+                </div>
+              )}
               <div className="learning-spanish">{word.spanish}</div>
               {word.type && (
                 <div style={{
@@ -235,6 +268,9 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
             <div className="target-word">
               <div className="target-label">ENCUENTRA EL ANTÓNIMO DE:</div>
               <div className="target-word-text">{currentWord.target}</div>
+              {currentWord.targetIpa && (
+                <div className="target-ipa">{currentWord.targetIpa}</div>
+              )}
             </div>
           )}
 
@@ -256,7 +292,9 @@ export const GameEngine: React.FC<GameEngineProps> = ({ phase, mode, onExit }) =
             {fallingWords.map((word) => {
               // Determinar velocidad según modo y dificultad
               let fallSpeed;
-              if (gameState === 'training') {
+              if (speedMs) {
+                fallSpeed = speedMs;
+              } else if (gameState === 'training') {
                 fallSpeed = difficultyConfig.easy.speed;
               } else {
                 fallSpeed = difficultyConfig[difficulty].speed;

@@ -124,11 +124,9 @@ export function getSpeedLevel(phaseId: number): SpeedLevel {
 // CONSULTAS
 // ============================================================
 
-/** Devuelve true si un bloque está desbloqueado (el primero siempre, o si el anterior está completado) */
-export function isBlockUnlocked(phaseId: number, blockIndex: number, totalPairs: number): boolean {
-  if (blockIndex === 0) return true;
-  const progress = getPhaseProgress(phaseId, totalPairs);
-  return progress.blocks[blockIndex - 1]?.completed ?? false;
+/** Todos los bloques están desbloqueados: el jugador elige libremente */
+export function isBlockUnlocked(_phaseId: number, _blockIndex: number, _totalPairs: number): boolean {
+  return true;
 }
 
 /** Devuelve los índices de bloques completados */

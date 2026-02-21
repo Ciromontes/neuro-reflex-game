@@ -14,8 +14,8 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/learn/:phaseId" element={<LearningPage />} />
           <Route path="/setup/:phaseId" element={<PhaseSetupPage />} />
-          <Route path="/play/:phaseId/:mode" element={<GamePage />} />
           <Route path="/play/:phaseId/block/:blockIndex" element={<GamePage />} />
+          <Route path="/play/:phaseId/:mode" element={<GamePage />} />
         </Routes>
       </div>
     </Router>

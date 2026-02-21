@@ -1,7 +1,27 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Phase, WordPair, FallingWord, Feedback, Particle, ConfettiPiece } from '../types';
 
-export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' | 'hard') => {
+interface UseGameLogicOptions {
+  /** Subset of words to play (e.g. a single block). Falls back to phase.wordPairs */
+  blockWords?: WordPair[];
+  /** Fixed fall speed in ms. When set, overrides difficultyConfig speeds */
+  speedMs?: number;
+  /** Called when the player wins (victory state) with the final score */
+  onBlockComplete?: (score: number) => void;
+}
+
+export const useGameLogic = (
+  phase: Phase,
+  mode: 'training' | 'easy' | 'medium' | 'hard',
+  options: UseGameLogicOptions = {}
+) => {
+  const { blockWords, speedMs: fixedSpeedMs, onBlockComplete } = options;
+
+  // The actual word list used for the game
+  const activeWords = useMemo(
+    () => (blockWords && blockWords.length > 0 ? blockWords : phase.wordPairs),
+    [blockWords, phase.wordPairs]
+  );
   // Estados del juego
   const [gameState, setGameState] = useState<'learning' | 'training' | 'easy' | 'medium' | 'hard' | 'paused' | 'gameover' | 'victory'>('learning');
   const [score, setScore] = useState(0);
@@ -30,6 +50,10 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
   // Refs para romper dependencias circulares entre callbacks
   const nextWordRef = useRef<() => void>(() => {});
   const handleMissedWordRef = useRef<() => void>(() => {});
+  const onBlockCompleteRef = useRef(onBlockComplete);
+
+  // Keep onBlockComplete ref in sync
+  useEffect(() => { onBlockCompleteRef.current = onBlockComplete; }, [onBlockComplete]);
 
   // Refs para estado actual (evitar stale closures)
   const gameStateRef = useRef(gameState);
@@ -40,6 +64,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
   const livesRef = useRef(lives);
   const difficultyRef = useRef(difficulty);
   const missedWordsRef = useRef(missedWords);
+  const scoreRef = useRef(score);
 
   // Mantener refs sincronizadas con el estado
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
@@ -49,6 +74,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
   useEffect(() => { correctCountRef.current = correctCount; }, [correctCount]);
   useEffect(() => { livesRef.current = lives; }, [lives]);
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
+  useEffect(() => { scoreRef.current = score; }, [score]);
   useEffect(() => { missedWordsRef.current = missedWords; }, [missedWords]);
 
   // Configuración de dificultad memoizada
@@ -60,10 +86,10 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
 
   // Inicializar ciclo de palabras sin repetición
   const initializeWordCycle = useCallback(() => {
-    const shuffled = [...phase.wordPairs].sort(() => Math.random() - 0.5);
+    const shuffled = [...activeWords].sort(() => Math.random() - 0.5);
     currentCycleRef.current = shuffled;
     availableWordsRef.current = [...shuffled];
-  }, [phase.wordPairs]);
+  }, [activeWords]);
 
   // Generar palabras que caen (CON DISTRACTORES ESPECÍFICOS DE CADA FASE)
   const generateFallingWords = useCallback((targetWord: WordPair): FallingWord[] => {
@@ -81,7 +107,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     });
 
     // Obtener otros antónimos (excluyendo el actual)
-    const otherAntonyms = phase.wordPairs
+    const otherAntonyms = activeWords
       .filter(w => w.antonym !== targetWord.antonym)
       .map(w => w.antonym);
     
@@ -104,7 +130,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
     });
 
     return words;
-  }, [phase.wordPairs, phase.distractorWords]);
+  }, [activeWords, phase.distractorWords]);
 
   // Sintetizar voz
   const speakWord = useCallback((word: string, rate = 1) => {
@@ -199,7 +225,9 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
 
       const d = difficultyRef.current;
       let fallTime: number;
-      if (gameStateRef.current === 'training') {
+      if (fixedSpeedMs) {
+        fallTime = fixedSpeedMs;
+      } else if (gameStateRef.current === 'training') {
         fallTime = difficultyConfig.easy.speed;
       } else {
         fallTime = difficultyConfig[d].speed;
@@ -210,7 +238,7 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
         handleMissedWordRef.current();
       }, fallTime + 800);
     }, 100);
-  }, [initializeWordCycle, generateFallingWords, difficultyConfig]);
+  }, [initializeWordCycle, generateFallingWords, difficultyConfig, fixedSpeedMs]);
 
   // Mantener ref sincronizada
   useEffect(() => { nextWordRef.current = nextWord; }, [nextWord]);
@@ -236,7 +264,9 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
       
       setFeedback({
         type: 'missed',
-        text: `¡PERDISTE! Era: ${cw.antonym}`,
+        text: cw.antonymIpa
+          ? `\u00a1PERDISTE! Era: ${cw.antonym} ${cw.antonymIpa}`
+          : `\u00a1PERDISTE! Era: ${cw.antonym}`,
         points: '-75'
       });
 
@@ -337,6 +367,8 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
               setTimeout(() => {
                 createConfetti();
                 setGameState('victory');
+                // Notify parent (e.g. GamePage) that the block is finished
+                onBlockCompleteRef.current?.(scoreRef.current);
               }, 2000);
               return newLives;
             }
@@ -353,7 +385,9 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
       
       setFeedback({
         type: 'correct',
-        text: cw.spanish,
+        text: cw.antonymIpa
+          ? `${cw.spanish}  \u2014  ${cw.target} ${cw.targetIpa || ''} \u2194 ${cw.antonym} ${cw.antonymIpa}`
+          : cw.spanish,
         points: `+${points}`
       });
       
@@ -375,7 +409,9 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
         
         setFeedback({
           type: 'wrong',
-          text: `¡NO! La respuesta es: ${cw.antonym}`,
+          text: cw.antonymIpa
+            ? `\u00a1NO! La respuesta es: ${cw.antonym} ${cw.antonymIpa}`
+            : `\u00a1NO! La respuesta es: ${cw.antonym}`,
           points: '-50'
         });
 
@@ -469,7 +505,9 @@ export const useGameLogic = (phase: Phase, mode: 'training' | 'easy' | 'medium' 
         setFallingWords(words);
 
         let fallTime: number;
-        if (gameState === 'training') {
+        if (fixedSpeedMs) {
+          fallTime = fixedSpeedMs;
+        } else if (gameState === 'training') {
           fallTime = difficultyConfig.easy.speed;
         } else {
           fallTime = difficultyConfig[difficulty].speed;
