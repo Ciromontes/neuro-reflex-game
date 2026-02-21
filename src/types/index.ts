@@ -119,6 +119,8 @@ export interface Feedback {
   points: string;
   /** Optional IPA transcription shown smaller below text */
   ipa?: string;
+  /** Spanish meaning shown in feedback column */
+  spanish?: string;
 }
 
 export interface Particle {

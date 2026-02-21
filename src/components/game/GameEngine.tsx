@@ -1,23 +1,25 @@
-import React from 'react';
-import { Volume2, Play, RotateCcw, Pause, X, Book } from 'lucide-react';
-import type { Phase, WordPair } from '../../types';
+import React, { useState } from 'react';
+import { Volume2, Play, RotateCcw, Pause, X, Book, ArrowRight } from 'lucide-react';
+import type { Phase, WordPair, SpeedLevel } from '../../types';
+import { SPEED_LEVELS } from '../../types';
 import { useGameLogic } from '../../hooks/useGameLogic';
 import { BlockResults } from './BlockResults';
+
+const TOTAL_LOOPS = 3;
 
 interface GameEngineProps {
   phase: Phase;
   mode: 'training' | 'play' | 'easy' | 'medium' | 'hard';
   onExit: () => void;
-  /** Subset of words (a single block). Falls back to full phase if omitted */
   blockWords?: WordPair[];
-  /** Fixed fall speed in ms (from SpeedControl) */
   speedMs?: number;
-  /** Current block index (0-based), for display purposes */
   blockIndex?: number;
-  /** Called when the player wins with the final score */
   onBlockComplete?: (score: number) => void;
-  /** Navigate to the next block (only provided if a next block exists) */
   onNextBlock?: () => void;
+  /** Current speed level (1-5) for in-game display/control */
+  speedLevel?: SpeedLevel;
+  /** Callback to change speed during gameplay */
+  onSpeedChange?: (level: SpeedLevel) => void;
 }
 
 export const GameEngine: React.FC<GameEngineProps> = ({
@@ -28,8 +30,15 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   speedMs,
   blockIndex,
   onBlockComplete,
-  onNextBlock
+  onNextBlock,
+  speedLevel,
+  onSpeedChange
 }) => {
+  // Session loop state (3 rounds per block)
+  const [sessionLoop, setSessionLoop] = useState(1);
+  const [sessionScores, setSessionScores] = useState<number[]>([]);
+  const [sessionMissedWords, setSessionMissedWords] = useState<WordPair[]>([]);
+
   const {
     gameState,
     score,
@@ -62,6 +71,26 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   const blockLabel = blockIndex != null ? ` • Bloque ${blockIndex + 1}` : '';
 
   const isBlockMode = blockIndex != null && blockWords && blockWords.length > 0;
+
+  // Actual gameState mode used when starting a round
+  const actualGameMode: 'training' | 'easy' | 'medium' | 'hard' =
+    mode === 'play' ? 'easy' : mode === 'training' ? 'training' : (mode as 'easy' | 'medium' | 'hard');
+
+  // Advance to next loop within the session
+  const handleNextLoop = () => {
+    setSessionScores(prev => [...prev, score]);
+    setSessionMissedWords(prev => [...prev, ...missedWords]);
+    setSessionLoop(prev => prev + 1);
+    startGame(actualGameMode);
+  };
+
+  // Full retry — reset all loops
+  const handleFullRetry = () => {
+    setSessionLoop(1);
+    setSessionScores([]);
+    setSessionMissedWords([]);
+    resetGame();
+  };
 
   // Si el estado es 'learning', mostramos la pantalla de aprendizaje
   if (gameState === 'learning') {
@@ -200,18 +229,114 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   // Si el estado es 'victory', mostramos pantalla de victoria
   if (gameState === 'victory') {
     if (isBlockMode) {
+      // Mid-session: loop not yet complete
+      if (sessionLoop < TOTAL_LOOPS) {
+        return (
+          <div className="loop-complete-screen">
+            <div className="loop-complete-icon">✅</div>
+            <div className="loop-complete-title">
+              RONDA {sessionLoop}/{TOTAL_LOOPS} COMPLETADA
+            </div>
+            <div className="loop-complete-stats">
+              <div className="loop-complete-stat">
+                <span className="loop-complete-stat-value">{score}</span>
+                <span className="loop-complete-stat-label">Puntos</span>
+              </div>
+              <div className="loop-complete-stat">
+                <span className="loop-complete-stat-value">{correctCount}</span>
+                <span className="loop-complete-stat-label">Aciertos</span>
+              </div>
+            </div>
+            <p className="loop-complete-hint">
+              {sessionLoop === 1
+                ? '¡Buen comienzo! Repite para afianzar las palabras.'
+                : '¡Casi ahí! Una ronda más para dominar el bloque.'}
+            </p>
+            <button className="btn btn-primary" onClick={handleNextLoop}>
+              <ArrowRight size={22} />
+              SIGUIENTE RONDA
+            </button>
+          </div>
+        );
+      }
+
+      // Final loop — mastery!
+      const totalScore = [...sessionScores, score].reduce((a, b) => a + b, 0);
       return (
-        <BlockResults
-          victory={true}
-          blockIndex={blockIndex}
-          blockWords={blockWords}
-          studiedWords={studiedWords}
-          score={score}
-          correctCount={correctCount}
-          onRetry={resetGame}
-          onNextBlock={onNextBlock}
-          onExit={onExit}
-        />
+        <div className="block-results mastery-results">
+          <div className="block-results-header">
+            <div className="block-results-title victory">
+              🏆 ¡BLOQUE DOMINADO!
+            </div>
+            <div className="block-results-subtitle">
+              Bloque {blockIndex + 1} • {TOTAL_LOOPS} rondas completadas
+            </div>
+          </div>
+
+          <div className="block-results-stats">
+            <div className="block-results-stat">
+              <div className="block-results-stat-value">{totalScore}</div>
+              <div className="block-results-stat-label">Puntos totales</div>
+            </div>
+            <div className="block-results-stat">
+              <div className="block-results-stat-value">
+                {blockWords.length > 0
+                  ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+                  : 0}%
+              </div>
+              <div className="block-results-stat-label">Precisión</div>
+            </div>
+            <div className="block-results-stat">
+              <div className="block-results-stat-value">{TOTAL_LOOPS}/{TOTAL_LOOPS}</div>
+              <div className="block-results-stat-label">Rondas</div>
+            </div>
+          </div>
+
+          {/* Word list from final loop */}
+          <div className="block-results-words">
+            {blockWords.map((word, idx) => {
+              const isCorrectWord = studiedWords.has(word.target);
+              return (
+                <div key={idx} className={`block-results-word ${isCorrectWord ? 'correct' : 'missed'}`}>
+                  <div className="block-results-word-icon">
+                    {isCorrectWord ? '✅' : '❌'}
+                  </div>
+                  <div className="block-results-word-pair">
+                    <span className="block-results-word-target">{word.target}</span>
+                    <span className="block-results-word-arrow">↔</span>
+                    <span className="block-results-word-antonym">{word.antonym}</span>
+                  </div>
+                  {(word.targetIpa || word.antonymIpa) && (
+                    <div className="block-results-word-ipa">
+                      {word.targetIpa} — {word.antonymIpa}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mastery-message">
+            🎓 ¡Has demostrado dominio de estas {blockWords.length} palabras!
+          </div>
+
+          <div className="block-results-actions">
+            <button className="btn btn-primary" onClick={handleFullRetry}>
+              <RotateCcw size={20} />
+              REPETIR
+            </button>
+            {onNextBlock && (
+              <button className="btn btn-primary" onClick={onNextBlock}>
+                <ArrowRight size={20} />
+                SIGUIENTE BLOQUE
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={onExit}>
+              <X size={20} />
+              BLOQUES
+            </button>
+          </div>
+        </div>
       );
     }
     return (
@@ -314,6 +439,35 @@ export const GameEngine: React.FC<GameEngineProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Session loop indicator (block mode) */}
+            {isBlockMode && (
+              <div className="stat-item">
+                <div className="stat-label">Ronda</div>
+                <div className="stat-value" style={{color: '#ffd700', fontSize: '20px'}}>
+                  {sessionLoop}/{TOTAL_LOOPS}
+                </div>
+              </div>
+            )}
+
+            {/* Mini speed control (block mode) */}
+            {isBlockMode && speedLevel && onSpeedChange && (
+              <div className="stat-item">
+                <div className="stat-label">Velocidad</div>
+                <div className="mini-speed">
+                  {SPEED_LEVELS.map(sl => (
+                    <button
+                      key={sl.level}
+                      className={`mini-speed__btn ${sl.level === speedLevel ? 'mini-speed__btn--active' : ''}`}
+                      onClick={() => onSpeedChange(sl.level as SpeedLevel)}
+                      title={sl.label}
+                    >
+                      {sl.level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -404,6 +558,9 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             <div className="feedback-text">{feedback.text}</div>
             {feedback.ipa && (
               <div className="feedback-ipa">{feedback.ipa}</div>
+            )}
+            {feedback.spanish && (
+              <div className="feedback-spanish">{feedback.spanish}</div>
             )}
             <div className="feedback-points">{feedback.points}</div>
           </div>

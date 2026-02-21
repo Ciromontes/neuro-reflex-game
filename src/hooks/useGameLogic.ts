@@ -95,7 +95,7 @@ export const useGameLogic = (
   const generateFallingWords = useCallback((targetWord: WordPair): FallingWord[] => {
     const words: FallingWord[] = [];
     const numWords = 4;
-    const positions = [20, 40, 60, 80];
+    const positions = [28, 42, 56, 70];
     const shuffledPositions = [...positions].sort(() => Math.random() - 0.5);
 
     // Palabra correcta
@@ -266,7 +266,8 @@ export const useGameLogic = (
         type: 'missed',
         text: `\u00a1PERDISTE! Era: ${cw.antonym}`,
         points: '-75',
-        ipa: cw.antonymIpa || undefined
+        ipa: cw.antonymIpa || undefined,
+        spanish: cw.spanish
       });
 
       setScore(s => Math.max(0, s - 75));
@@ -386,7 +387,8 @@ export const useGameLogic = (
         type: 'correct',
         text: cw.antonym,
         points: `+${points}`,
-        ipa: cw.antonymIpa || undefined
+        ipa: cw.antonymIpa || undefined,
+        spanish: cw.spanish
       });
       
       setTimeout(() => {
@@ -409,7 +411,8 @@ export const useGameLogic = (
           type: 'wrong',
           text: `\u00a1NO! Era: ${cw.antonym}`,
           points: '-50',
-          ipa: cw.antonymIpa || undefined
+          ipa: cw.antonymIpa || undefined,
+          spanish: cw.spanish
         });
 
         setScore(s => Math.max(0, s - 50));

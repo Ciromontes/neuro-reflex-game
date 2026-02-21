@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { GameEngine } from '../../components/game';
 import { getPhaseById } from '../../data/phases';
@@ -24,8 +24,9 @@ const GamePage: React.FC = () => {
 
   // Velocidad desde query string (default 3 = Normal)
   const speedParam = parseInt(searchParams.get('speed') || '3') as SpeedLevel;
-  const speedLevel = ([1, 2, 3, 4, 5].includes(speedParam) ? speedParam : 3) as SpeedLevel;
-  const speedMs = SPEED_LEVELS.find(s => s.level === speedLevel)?.ms ?? 5000;
+  const initialSpeedLevel = ([1, 2, 3, 4, 5].includes(speedParam) ? speedParam : 3) as SpeedLevel;
+  const [currentSpeedLevel, setCurrentSpeedLevel] = useState<SpeedLevel>(initialSpeedLevel);
+  const speedMs = SPEED_LEVELS.find(s => s.level === currentSpeedLevel)?.ms ?? 5000;
 
   // Modo de juego desde query string: 'training' (con pistas) o 'play' (sin pistas)
   const modeParam = searchParams.get('mode');
@@ -100,7 +101,7 @@ const GamePage: React.FC = () => {
 
   const handleNextBlock = () => {
     if (isBlockMode && blockIndex !== null) {
-      navigate(`/play/${phaseId}/block/${blockIndex + 1}?speed=${speedLevel}&mode=${blockGameMode}`);
+      navigate(`/play/${phaseId}/block/${blockIndex + 1}?speed=${currentSpeedLevel}&mode=${blockGameMode}`);
     }
   };
 
@@ -119,6 +120,8 @@ const GamePage: React.FC = () => {
         blockIndex={blockIndex ?? undefined}
         onBlockComplete={isBlockMode ? handleBlockComplete : undefined}
         onNextBlock={hasNextBlock ? handleNextBlock : undefined}
+        speedLevel={isBlockMode ? currentSpeedLevel : undefined}
+        onSpeedChange={isBlockMode ? setCurrentSpeedLevel : undefined}
       />
     </div>
   );
