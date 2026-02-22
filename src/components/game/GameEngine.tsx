@@ -76,6 +76,20 @@ export const GameEngine: React.FC<GameEngineProps> = ({
     setWordsOverride
   } = useGameLogic(phase, mode, { blockWords, speedMs, onBlockComplete });
 
+  // Speak a word aloud (used when a falling word block is tapped)
+  const speakFallingWord = (text: string) => {
+    if (!window.speechSynthesis || !soundEnabled) return;
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US';
+    utt.rate = 0.9;
+    const voices = window.speechSynthesis.getVoices();
+    const eng = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+    if (eng) utt.voice = eng;
+    window.speechSynthesis.speak(utt);
+  };
+
   // Words to display on the learning screen
   const displayWords = blockWords && blockWords.length > 0 ? blockWords : phase.wordPairs;
   const blockLabel = blockIndex != null ? ` • Bloque ${blockIndex + 1}` : '';
@@ -672,6 +686,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
                   onPointerDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    speakFallingWord(word.text);
                     handleWordClick(word, e);
                   }}
                 >

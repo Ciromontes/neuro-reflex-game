@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getPhaseById } from '../../data/phases';
 import { getPhaseProgress, saveSpeedLevel } from '../../utils/progressService';
-import { getBlockCount } from '../../utils/blockHelpers';
+import { getBlockCount, getBlockWords } from '../../utils/blockHelpers';
 import BlockSelector from '../../components/phase-selection/BlockSelector';
 import SpeedControl from '../../components/phase-selection/SpeedControl';
 import type { SpeedLevel } from '../../types';
@@ -76,6 +76,11 @@ const PhaseSetupPage: React.FC = () => {
 
   // Doble tap en un bloque ya seleccionado → entra directo al juego
   const handleSelectBlock = (index: number) => {
+    // Speak the first word pair of the tapped block (audio feedback)
+    const bWords = getBlockWords(phase, index);
+    if (bWords.length > 0) {
+      speakWordPair(bWords[0].target, bWords[0].antonym);
+    }
     if (selectedBlock === index) {
       const modeParam = activeTab === 'training' ? 'training' : 'play';
       navigate(`/play/${phase.id}/block/${index}?speed=${speed}&mode=${modeParam}`);

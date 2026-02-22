@@ -108,8 +108,12 @@ export const useGameLogic = (
     // Phrasal verbs → 3 options (wider text), others → 4
     const isPhrasal = phase.mechanic === 'association';
     const numWords = isPhrasal ? 3 : 4;
-    // Spread positions across full width for mobile
-    const positions = isPhrasal ? [15, 50, 85] : [12, 37, 63, 87];
+    // On desktop cluster words to the central zone so the mouse doesn't
+    // have to travel from edge to edge. On mobile spread wide (thumbs travel).
+    const isDesktop = window.innerWidth >= 769;
+    const positions = isPhrasal
+      ? (isDesktop ? [28, 48, 68] : [15, 50, 85])
+      : (isDesktop ? [23, 37, 52, 66] : [12, 37, 63, 87]);
     const shuffledPositions = [...positions].sort(() => Math.random() - 0.5);
 
     // Palabra correcta

@@ -424,6 +424,17 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* On desktop, cap word width so clustered words don't visually overlap */
+@media (min-width: 769px) {
+  .falling-word {
+    max-width: 220px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 @keyframes fall {
   0% { 
     top: -100px;
@@ -1741,5 +1752,14 @@ body {
 @media (max-width: 480px) {
   .progress-climber {
     display: none;
+  }
+}
+
+/* On desktop: fix to viewport bottom-right so height:100% quirks don't shift it */
+@media (min-width: 769px) {
+  .progress-climber {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
   }
 }
