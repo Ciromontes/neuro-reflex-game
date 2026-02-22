@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Book, ChevronLeft } from 'lucide-react';
+import { Play, ChevronLeft } from 'lucide-react';
 import { getPhaseById } from '../../data/phases';
 
 const LearningPage: React.FC = () => {

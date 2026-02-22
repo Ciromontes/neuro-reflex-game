@@ -203,7 +203,6 @@ export const useGameLogic = (
 
   // === SIGUIENTE PALABRA (usa refs para evitar dependencias circulares) ===
   const nextWord = useCallback((): void => {
-    const gs = gameStateRef.current;
     const mw = missedWordsRef.current;
     let nextWordData: WordPair;
     
