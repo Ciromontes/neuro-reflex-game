@@ -669,7 +669,11 @@ export const GameEngine: React.FC<GameEngineProps> = ({
                     animation: `fall ${fallSpeed}ms linear forwards`,
                     animationPlayState: isPaused ? 'paused' : 'running'
                   }}
-                  onClick={(e) => handleWordClick(word, e)}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleWordClick(word, e);
+                  }}
                 >
                   {word.text}
                 </div>

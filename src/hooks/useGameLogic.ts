@@ -101,8 +101,11 @@ export const useGameLogic = (
   // Generar palabras que caen (CON DISTRACTORES ESPECÍFICOS DE CADA FASE)
   const generateFallingWords = useCallback((targetWord: WordPair): FallingWord[] => {
     const words: FallingWord[] = [];
-    const numWords = 4;
-    const positions = [28, 42, 56, 70];
+    // Phrasal verbs → 3 options (wider text), others → 4
+    const isPhrasal = phase.mechanic === 'association';
+    const numWords = isPhrasal ? 3 : 4;
+    // Spread positions across full width for mobile
+    const positions = isPhrasal ? [15, 50, 85] : [12, 37, 63, 87];
     const shuffledPositions = [...positions].sort(() => Math.random() - 0.5);
 
     // Palabra correcta
@@ -137,7 +140,7 @@ export const useGameLogic = (
     });
 
     return words;
-  }, [activeWords, phase.distractorWords]);
+  }, [activeWords, phase.distractorWords, phase.mechanic]);
 
   // Sintetizar voz
   const speakWord = useCallback((word: string, rate = 1) => {
@@ -302,7 +305,7 @@ export const useGameLogic = (
   useEffect(() => { handleMissedWordRef.current = handleMissedWord; }, [handleMissedWord]);
 
   // === MANEJAR CLICK EN PALABRA ===
-  const handleWordClick = useCallback((word: FallingWord, event: React.MouseEvent): void => {
+  const handleWordClick = useCallback((word: FallingWord, event: React.SyntheticEvent<HTMLElement>): void => {
     const gs = gameStateRef.current;
     const paused = isPausedRef.current;
     const cw = currentWordRef.current;
