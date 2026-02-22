@@ -1052,3 +1052,210 @@ body {
     font-size: 28px;
   }
 }
+
+/* ==============================
+   LOOP: MISSED WORDS REVIEW
+   ============================== */
+.loop-missed-review {
+  background: rgba(255, 61, 0, 0.08);
+  border: 1px solid rgba(255, 61, 0, 0.2);
+  border-radius: 12px;
+  padding: 16px 20px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.loop-missed-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ff9500;
+  margin-bottom: 10px;
+}
+
+.loop-missed-word {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-wrap: wrap;
+}
+
+.loop-missed-word:last-of-type {
+  border-bottom: none;
+}
+
+.loop-missed-target {
+  font-weight: 700;
+  color: #ff3d00;
+  font-size: 15px;
+}
+
+.loop-missed-arrow {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+}
+
+.loop-missed-antonym {
+  color: #00ff87;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.loop-missed-spanish {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.loop-missed-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  font-style: italic;
+}
+
+.loop-perfect {
+  font-size: 20px;
+  color: #ffd700;
+  padding: 16px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  text-align: center;
+}
+
+/* ==============================
+   MASTERY LEVEL BADGE
+   ============================== */
+.mastery-level {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 28px;
+  border: 2px solid;
+  border-radius: 50px;
+  background: rgba(255, 255, 255, 0.03);
+  animation: bounceIn 0.5s ease-out;
+}
+
+.mastery-level-icon {
+  font-size: 36px;
+}
+
+.mastery-level-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+/* ==============================
+   MASTERY: PER-LOOP SUMMARY
+   ============================== */
+.mastery-loop-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 20px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.mastery-loop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.mastery-loop-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+}
+
+.mastery-loop-score {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #00d4ff;
+}
+
+.mastery-loop-accuracy {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #00ff87;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* ==============================
+   PHASE COMPLETION BANNER
+   ============================== */
+.phase-complete-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 30px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(0, 255, 135, 0.08));
+  border: 2px solid rgba(255, 215, 0, 0.4);
+  border-radius: 16px;
+  animation: bounceIn 0.6s ease-out;
+  margin-bottom: 10px;
+}
+
+.phase-complete-icon {
+  font-size: 48px;
+}
+
+.phase-complete-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.phase-complete-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Mobile for new 6C elements */
+@media (max-width: 600px) {
+  .loop-missed-review {
+    padding: 12px 14px;
+  }
+
+  .loop-missed-word {
+    font-size: 13px;
+  }
+
+  .mastery-level-title {
+    font-size: 18px;
+  }
+
+  .mastery-level-icon {
+    font-size: 28px;
+  }
+
+  .mastery-loop-summary {
+    padding: 10px 14px;
+  }
+
+  .phase-complete-text {
+    font-size: 18px;
+  }
+
+  .phase-complete-icon {
+    font-size: 36px;
+  }
+}

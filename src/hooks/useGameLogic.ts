@@ -200,8 +200,8 @@ export const useGameLogic = (
     const mw = missedWordsRef.current;
     let nextWordData: WordPair;
     
-    // Sistema de repetición espaciada
-    if (gs !== 'training' && mw.length > 0 && wordQueueRef.current.length === 0) {
+    // Sistema de repetición espaciada (aplica en todos los modos, incluyendo training)
+    if (mw.length > 0 && wordQueueRef.current.length === 0) {
       nextWordData = mw[0];
       setMissedWords(prev => prev.slice(1));
       wordQueueRef.current = [1, 2, 3, 4];
@@ -439,19 +439,21 @@ export const useGameLogic = (
   }, [createParticles, createConfetti, speakWord, difficultyConfig]);
 
   // Iniciar juego (para cada modo)
-  const startGame = useCallback((gameMode: 'training' | 'play' | 'easy' | 'medium' | 'hard') => {
+  // seedWords: palabras falladas de rondas anteriores que se repiten con prioridad (memoria espaciada)
+  const startGame = useCallback((gameMode: 'training' | 'play' | 'easy' | 'medium' | 'hard', seedWords?: WordPair[]) => {
     setGameState(gameMode);
     setScore(0);
     setLives(phase.difficultyLevels[gameMode].lives);
     setCombo(0);
     setCorrectCount(0);
-    setMissedWords([]);
+    setMissedWords(seedWords ?? []);
     setStudiedWords(new Set());
     setCurrentWord(null);
     setFallingWords([]);
     setIsPaused(false);
     setDifficulty('easy');
-    wordQueueRef.current = [];
+    // Si hay seedWords, inicializar queue para que la primera inserción ocurra tras 1 palabra normal
+    wordQueueRef.current = seedWords && seedWords.length > 0 ? [1] : [];
     initializeWordCycle();
   }, [phase.difficultyLevels, initializeWordCycle]);
 

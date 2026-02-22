@@ -4,6 +4,7 @@ import type { Phase, WordPair, SpeedLevel } from '../../types';
 import { SPEED_LEVELS } from '../../types';
 import { useGameLogic } from '../../hooks/useGameLogic';
 import { BlockResults } from './BlockResults';
+import { getPhaseProgress } from '../../utils/progressService';
 
 const TOTAL_LOOPS = 3;
 
@@ -38,6 +39,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   const [sessionLoop, setSessionLoop] = useState(1);
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   const [sessionMissedWords, setSessionMissedWords] = useState<WordPair[]>([]);
+  const [sessionAccuracies, setSessionAccuracies] = useState<number[]>([]);
 
   const {
     gameState,
@@ -78,16 +80,31 @@ export const GameEngine: React.FC<GameEngineProps> = ({
 
   // Advance to next loop within the session
   const handleNextLoop = () => {
+    // Save current round stats
     setSessionScores(prev => [...prev, score]);
-    setSessionMissedWords(prev => [...prev, ...missedWords]);
+    const loopAccuracy = blockWords && blockWords.length > 0
+      ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+      : 0;
+    setSessionAccuracies(prev => [...prev, loopAccuracy]);
+
+    // Accumulate unique missed words across sessions
+    const allMissedMap = new Map<string, WordPair>();
+    for (const w of sessionMissedWords) allMissedMap.set(w.target, w);
+    for (const w of missedWords) allMissedMap.set(w.target, w);
+    const allMissed = Array.from(allMissedMap.values());
+    setSessionMissedWords(allMissed);
+
     setSessionLoop(prev => prev + 1);
-    startGame(actualGameMode);
+
+    // Seed next loop with accumulated missed words for spaced repetition
+    startGame(actualGameMode, allMissed);
   };
 
   // Full retry — reset all loops
   const handleFullRetry = () => {
     setSessionLoop(1);
     setSessionScores([]);
+    setSessionAccuracies([]);
     setSessionMissedWords([]);
     resetGame();
   };
@@ -231,6 +248,11 @@ export const GameEngine: React.FC<GameEngineProps> = ({
     if (isBlockMode) {
       // Mid-session: loop not yet complete
       if (sessionLoop < TOTAL_LOOPS) {
+        // Deduplicate missed words from this round
+        const roundMissedMap = new Map<string, WordPair>();
+        for (const w of missedWords) roundMissedMap.set(w.target, w);
+        const roundMissed = Array.from(roundMissedMap.values());
+
         return (
           <div className="loop-complete-screen">
             <div className="loop-complete-icon">✅</div>
@@ -243,10 +265,34 @@ export const GameEngine: React.FC<GameEngineProps> = ({
                 <span className="loop-complete-stat-label">Puntos</span>
               </div>
               <div className="loop-complete-stat">
-                <span className="loop-complete-stat-value">{correctCount}</span>
-                <span className="loop-complete-stat-label">Aciertos</span>
+                <span className="loop-complete-stat-value">
+                  {blockWords
+                    ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+                    : 0}%
+                </span>
+                <span className="loop-complete-stat-label">Precisión</span>
               </div>
             </div>
+
+            {roundMissed.length > 0 ? (
+              <div className="loop-missed-review">
+                <div className="loop-missed-title">📝 Palabras a repasar:</div>
+                {roundMissed.map((w, i) => (
+                  <div key={i} className="loop-missed-word">
+                    <span className="loop-missed-target">{w.target}</span>
+                    <span className="loop-missed-arrow">↔</span>
+                    <span className="loop-missed-antonym">{w.antonym}</span>
+                    {w.spanish && <span className="loop-missed-spanish">({w.spanish})</span>}
+                  </div>
+                ))}
+                <div className="loop-missed-note">
+                  Estas palabras aparecerán con más frecuencia en la próxima ronda.
+                </div>
+              </div>
+            ) : (
+              <div className="loop-perfect">🌟 ¡Ronda perfecta! Sin errores.</div>
+            )}
+
             <p className="loop-complete-hint">
               {sessionLoop === 1
                 ? '¡Buen comienzo! Repite para afianzar las palabras.'
@@ -261,16 +307,57 @@ export const GameEngine: React.FC<GameEngineProps> = ({
       }
 
       // Final loop — mastery!
-      const totalScore = [...sessionScores, score].reduce((a, b) => a + b, 0);
+      const allScores = [...sessionScores, score];
+      const totalScore = allScores.reduce((a, b) => a + b, 0);
+
+      // Final loop accuracy
+      const finalAccuracy = blockWords.length > 0
+        ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+        : 0;
+      const allAccuracies = [...sessionAccuracies, finalAccuracy];
+
+      // Mastery level based on final accuracy
+      let masteryIcon: string, masteryTitle: string, masteryColor: string;
+      if (finalAccuracy >= 100) {
+        masteryIcon = '🏆'; masteryTitle = 'MAESTRO'; masteryColor = '#ffd700';
+      } else if (finalAccuracy >= 80) {
+        masteryIcon = '⭐'; masteryTitle = 'EXPERTO'; masteryColor = '#00ff87';
+      } else if (finalAccuracy >= 60) {
+        masteryIcon = '👍'; masteryTitle = 'AVANZADO'; masteryColor = '#00d4ff';
+      } else {
+        masteryIcon = '📖'; masteryTitle = 'EN PROGRESO'; masteryColor = '#ff9500';
+      }
+
+      // Check if all blocks in the phase are complete
+      const phaseProgress = getPhaseProgress(phase.id, phase.wordPairs.length);
+      const isPhaseComplete = phaseProgress.phaseCompleted;
+
       return (
         <div className="block-results mastery-results">
+          {/* Mastery level badge */}
+          <div className="mastery-level" style={{ borderColor: masteryColor }}>
+            <span className="mastery-level-icon">{masteryIcon}</span>
+            <span className="mastery-level-title" style={{ color: masteryColor }}>{masteryTitle}</span>
+          </div>
+
           <div className="block-results-header">
             <div className="block-results-title victory">
-              🏆 ¡BLOQUE DOMINADO!
+              ¡BLOQUE {blockIndex + 1} DOMINADO!
             </div>
             <div className="block-results-subtitle">
-              Bloque {blockIndex + 1} • {TOTAL_LOOPS} rondas completadas
+              {TOTAL_LOOPS} rondas completadas • Precisión final: {finalAccuracy}%
             </div>
+          </div>
+
+          {/* Per-loop summary */}
+          <div className="mastery-loop-summary">
+            {allScores.map((s, i) => (
+              <div key={i} className="mastery-loop-row">
+                <span className="mastery-loop-label">Ronda {i + 1}</span>
+                <span className="mastery-loop-score">{s} pts</span>
+                <span className="mastery-loop-accuracy">{allAccuracies[i]}%</span>
+              </div>
+            ))}
           </div>
 
           <div className="block-results-stats">
@@ -279,11 +366,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
               <div className="block-results-stat-label">Puntos totales</div>
             </div>
             <div className="block-results-stat">
-              <div className="block-results-stat-value">
-                {blockWords.length > 0
-                  ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
-                  : 0}%
-              </div>
+              <div className="block-results-stat-value">{finalAccuracy}%</div>
               <div className="block-results-stat-label">Precisión</div>
             </div>
             <div className="block-results-stat">
@@ -317,8 +400,23 @@ export const GameEngine: React.FC<GameEngineProps> = ({
           </div>
 
           <div className="mastery-message">
-            🎓 ¡Has demostrado dominio de estas {blockWords.length} palabras!
+            {masteryIcon} {finalAccuracy >= 80
+              ? `¡Dominio demostrado de estas ${blockWords.length} palabras!`
+              : `Sigue practicando para dominar estas ${blockWords.length} palabras.`}
           </div>
+
+          {/* Phase completion banner */}
+          {isPhaseComplete && (
+            <div className="phase-complete-banner">
+              <div className="phase-complete-icon">🎓</div>
+              <div className="phase-complete-text">
+                ¡FASE {phase.id} COMPLETADA!
+              </div>
+              <div className="phase-complete-subtitle">
+                Has dominado todas las palabras de &ldquo;{phase.title}&rdquo;
+              </div>
+            </div>
+          )}
 
           <div className="block-results-actions">
             <button className="btn btn-primary" onClick={handleFullRetry}>
