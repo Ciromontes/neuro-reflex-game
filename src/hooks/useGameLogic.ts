@@ -17,15 +17,22 @@ export const useGameLogic = (
 ) => {
   const { blockWords, speedMs: fixedSpeedMs, onBlockComplete } = options;
 
+  // Map 'play' → 'easy' for difficultyLevels lookups (play is not a valid key)
+  const safeDiffMode = (m: string) =>
+    m === 'play' ? 'easy' : (m as 'training' | 'easy' | 'medium' | 'hard');
+
+  // Dynamic word override (used for consolidation rounds)
+  const [wordsOverride, setWordsOverride] = useState<WordPair[] | null>(null);
+
   // The actual word list used for the game
   const activeWords = useMemo(
-    () => (blockWords && blockWords.length > 0 ? blockWords : phase.wordPairs),
-    [blockWords, phase.wordPairs]
+    () => wordsOverride ?? (blockWords && blockWords.length > 0 ? blockWords : phase.wordPairs),
+    [wordsOverride, blockWords, phase.wordPairs]
   );
   // Estados del juego
   const [gameState, setGameState] = useState<'learning' | 'training' | 'easy' | 'medium' | 'hard' | 'paused' | 'gameover' | 'victory'>('learning');
   const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(phase.difficultyLevels[mode].lives);
+  const [lives, setLives] = useState(phase.difficultyLevels[safeDiffMode(mode)].lives);
   const [combo, setCombo] = useState(0);
   const [currentWord, setCurrentWord] = useState<WordPair | null>(null);
   const [fallingWords, setFallingWords] = useState<FallingWord[]>([]);
@@ -328,8 +335,24 @@ export const useGameLogic = (
       const newCorrectCount = correctCountRef.current + 1;
       setCorrectCount(newCorrectCount);
       
-      // Sistema de vidas y progresión (SOLO EN MODOS NO-TRAINING)
-      if (gs !== 'training') {
+      // Block mode: victory when ALL unique words answered correctly
+      // (applies to both training and play modes)
+      const isBlockRound = !!(wordsOverride || (blockWords && blockWords.length > 0));
+      if (isBlockRound) {
+        const studiedSize = studiedWords.has(cw.target) ? studiedWords.size : studiedWords.size + 1;
+        if (studiedSize >= activeWords.length) {
+          if (fallTimerRef.current) {
+            clearTimeout(fallTimerRef.current);
+            fallTimerRef.current = null;
+          }
+          setTimeout(() => {
+            createConfetti();
+            setGameState('victory');
+            onBlockCompleteRef.current?.(scoreRef.current);
+          }, 2000);
+        }
+      } else if (gs !== 'training') {
+        // Legacy non-block mode: difficulty/lives progression
         if (newCorrectCount % 5 === 0) {
           setLives(prev => {
             const newLives = prev + 1;
@@ -367,7 +390,6 @@ export const useGameLogic = (
               setTimeout(() => {
                 createConfetti();
                 setGameState('victory');
-                // Notify parent (e.g. GamePage) that the block is finished
                 onBlockCompleteRef.current?.(scoreRef.current);
               }, 2000);
               return newLives;
@@ -436,14 +458,15 @@ export const useGameLogic = (
         return newLives;
       });
     }
-  }, [createParticles, createConfetti, speakWord, difficultyConfig]);
+  }, [createParticles, createConfetti, speakWord, difficultyConfig, blockWords, studiedWords, wordsOverride, activeWords]);
 
   // Iniciar juego (para cada modo)
   // seedWords: palabras falladas de rondas anteriores que se repiten con prioridad (memoria espaciada)
   const startGame = useCallback((gameMode: 'training' | 'play' | 'easy' | 'medium' | 'hard', seedWords?: WordPair[]) => {
-    setGameState(gameMode);
+    const safeMode = safeDiffMode(gameMode);
+    setGameState(gameMode === 'play' ? 'easy' : gameMode);
     setScore(0);
-    setLives(phase.difficultyLevels[gameMode].lives);
+    setLives(phase.difficultyLevels[safeMode].lives);
     setCombo(0);
     setCorrectCount(0);
     setMissedWords(seedWords ?? []);
@@ -474,6 +497,7 @@ export const useGameLogic = (
     setCorrectCount(0);
     setMissedWords([]);
     setStudiedWords(new Set());
+    setWordsOverride(null);
     wordQueueRef.current = [];
     if (fallTimerRef.current) {
       clearTimeout(fallTimerRef.current);
@@ -524,11 +548,14 @@ export const useGameLogic = (
     }
   }, [gameState, currentWord, initializeWordCycle, generateFallingWords, difficulty, difficultyConfig]);
 
-  // Limpiar timers al desmontar
+  // Limpiar timers y speech al desmontar
   useEffect(() => {
     return () => {
       if (fallTimerRef.current) {
         clearTimeout(fallTimerRef.current);
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
       }
     };
   }, []);
@@ -567,6 +594,7 @@ export const useGameLogic = (
       setFallingWords([]);
     },
     resetGame,
-    difficultyConfig
+    difficultyConfig,
+    setWordsOverride
   };
 };

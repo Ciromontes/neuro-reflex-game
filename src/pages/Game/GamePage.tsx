@@ -90,6 +90,8 @@ const GamePage: React.FC = () => {
     }
   };
 
+  const handleHome = () => navigate('/');
+
   const handleBlockComplete = (score: number) => {
     if (isBlockMode && blockIndex !== null) {
       completeBlock(phase.id, blockIndex, score, phase.wordPairs.length);
@@ -115,6 +117,7 @@ const GamePage: React.FC = () => {
         phase={phase}
         mode={isBlockMode ? blockGameMode : gameMode}
         onExit={handleExit}
+        onHome={handleHome}
         blockWords={isBlockMode ? blockWords : undefined}
         speedMs={isBlockMode ? speedMs : undefined}
         blockIndex={blockIndex ?? undefined}

@@ -1,25 +1,26 @@
-import React, { useState } from 'react';
-import { Volume2, Play, RotateCcw, Pause, X, Book, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Volume2, Play, RotateCcw, Pause, X, Book, ArrowRight, Home } from 'lucide-react';
 import type { Phase, WordPair, SpeedLevel } from '../../types';
 import { SPEED_LEVELS } from '../../types';
 import { useGameLogic } from '../../hooks/useGameLogic';
 import { BlockResults } from './BlockResults';
+import { ProgressClimber } from './ProgressClimber';
 import { getPhaseProgress } from '../../utils/progressService';
+import { getAccumulatedWords } from '../../utils/blockHelpers';
 
-const TOTAL_LOOPS = 3;
+const TOTAL_LOOPS = 4;
 
 interface GameEngineProps {
   phase: Phase;
   mode: 'training' | 'play' | 'easy' | 'medium' | 'hard';
   onExit: () => void;
+  onHome?: () => void;
   blockWords?: WordPair[];
   speedMs?: number;
   blockIndex?: number;
   onBlockComplete?: (score: number) => void;
   onNextBlock?: () => void;
-  /** Current speed level (1-5) for in-game display/control */
   speedLevel?: SpeedLevel;
-  /** Callback to change speed during gameplay */
   onSpeedChange?: (level: SpeedLevel) => void;
 }
 
@@ -27,6 +28,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   phase,
   mode,
   onExit,
+  onHome,
   blockWords,
   speedMs,
   blockIndex,
@@ -35,11 +37,16 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   speedLevel,
   onSpeedChange
 }) => {
-  // Session loop state (3 rounds per block)
+  // Session loop state (4 rounds per block)
   const [sessionLoop, setSessionLoop] = useState(1);
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   const [sessionMissedWords, setSessionMissedWords] = useState<WordPair[]>([]);
   const [sessionAccuracies, setSessionAccuracies] = useState<number[]>([]);
+
+  // Consolidation state (play mode only — after 4 block rounds)
+  const [isConsolidation, setIsConsolidation] = useState(false);
+  const [consolidationWords, setConsolidationWords] = useState<WordPair[]>([]);
+  const [pendingConsolidationStart, setPendingConsolidationStart] = useState(false);
 
   const {
     gameState,
@@ -65,7 +72,8 @@ export const GameEngine: React.FC<GameEngineProps> = ({
     togglePause,
     quitGame,
     resetGame,
-    difficultyConfig
+    difficultyConfig,
+    setWordsOverride
   } = useGameLogic(phase, mode, { blockWords, speedMs, onBlockComplete });
 
   // Words to display on the learning screen
@@ -73,21 +81,27 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   const blockLabel = blockIndex != null ? ` • Bloque ${blockIndex + 1}` : '';
 
   const isBlockMode = blockIndex != null && blockWords && blockWords.length > 0;
+  const isPlayMode = mode === 'play';
 
   // Actual gameState mode used when starting a round
   const actualGameMode: 'training' | 'easy' | 'medium' | 'hard' =
     mode === 'play' ? 'easy' : mode === 'training' ? 'training' : (mode as 'easy' | 'medium' | 'hard');
 
-  // Advance to next loop within the session
-  const handleNextLoop = () => {
-    // Save current round stats
+  // Ref for stable handler access in useEffect (avoids stale closures)
+  const handlersRef = useRef({
+    nextLoop: () => {},
+    startConsolidation: () => {},
+  });
+
+  // Update handler refs every render
+  handlersRef.current.nextLoop = () => {
     setSessionScores(prev => [...prev, score]);
-    const loopAccuracy = blockWords && blockWords.length > 0
-      ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+    const bw = blockWords || [];
+    const loopAccuracy = bw.length > 0
+      ? Math.round((bw.filter(w => studiedWords.has(w.target)).length / bw.length) * 100)
       : 0;
     setSessionAccuracies(prev => [...prev, loopAccuracy]);
 
-    // Accumulate unique missed words across sessions
     const allMissedMap = new Map<string, WordPair>();
     for (const w of sessionMissedWords) allMissedMap.set(w.target, w);
     for (const w of missedWords) allMissedMap.set(w.target, w);
@@ -95,19 +109,75 @@ export const GameEngine: React.FC<GameEngineProps> = ({
     setSessionMissedWords(allMissed);
 
     setSessionLoop(prev => prev + 1);
-
-    // Seed next loop with accumulated missed words for spaced repetition
     startGame(actualGameMode, allMissed);
   };
 
-  // Full retry — reset all loops
+  handlersRef.current.startConsolidation = () => {
+    // Save round 4 stats
+    setSessionScores(prev => [...prev, score]);
+    const bw = blockWords || [];
+    const loopAccuracy = bw.length > 0
+      ? Math.round((bw.filter(w => studiedWords.has(w.target)).length / bw.length) * 100)
+      : 0;
+    setSessionAccuracies(prev => [...prev, loopAccuracy]);
+
+    const allMissedMap = new Map<string, WordPair>();
+    for (const w of sessionMissedWords) allMissedMap.set(w.target, w);
+    for (const w of missedWords) allMissedMap.set(w.target, w);
+    setSessionMissedWords(Array.from(allMissedMap.values()));
+
+    // Load accumulated words for consolidation
+    const accumulated = blockIndex != null ? getAccumulatedWords(phase, blockIndex) : [];
+    setConsolidationWords(accumulated);
+    setWordsOverride(accumulated);
+    setIsConsolidation(true);
+    setSessionLoop(prev => prev + 1);
+    setPendingConsolidationStart(true);
+  };
+
+  // Full retry — reset all loops + consolidation
   const handleFullRetry = () => {
     setSessionLoop(1);
     setSessionScores([]);
     setSessionAccuracies([]);
     setSessionMissedWords([]);
+    setIsConsolidation(false);
+    setConsolidationWords([]);
+    setWordsOverride(null);
+    setPendingConsolidationStart(false);
     resetGame();
   };
+
+  // Auto-advance between rounds (3s pause then continue)
+  useEffect(() => {
+    if (gameState !== 'victory' || !isBlockMode) return;
+
+    const isConsolidationDone = isConsolidation;
+    const isFinalTraining = !isPlayMode && sessionLoop >= TOTAL_LOOPS;
+    const isFinal = isConsolidationDone || isFinalTraining;
+
+    if (isFinal) return; // Final mastery screen — no auto-advance
+
+    const timer = setTimeout(() => {
+      if (sessionLoop >= TOTAL_LOOPS && isPlayMode) {
+        handlersRef.current.startConsolidation();
+      } else {
+        handlersRef.current.nextLoop();
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState, sessionLoop, isPlayMode, isConsolidation, isBlockMode]);
+
+  // Start consolidation game after wordsOverride propagates
+  useEffect(() => {
+    if (pendingConsolidationStart) {
+      setPendingConsolidationStart(false);
+      startGame(actualGameMode);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingConsolidationStart]);
 
   // Si el estado es 'learning', mostramos la pantalla de aprendizaje
   if (gameState === 'learning') {
@@ -123,17 +193,11 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             <div key={idx} className="learning-card">
               <div className="learning-pair">
                 <span>{word.target}</span>
-                <span style={{color: '#00ff87', fontSize: '12px'}}>↔</span>
-                <span style={{color: '#00ff87'}}>{word.antonym}</span>
+                <span className="learning-pair-arrow">↔</span>
+                <span className="learning-pair-antonym">{word.antonym}</span>
               </div>
               {(word.targetIpa || word.antonymIpa) && (
-                <div style={{
-                  fontSize: '11px',
-                  color: 'rgba(255, 255, 255, 0.45)',
-                  textAlign: 'center',
-                  fontFamily: 'monospace',
-                  marginTop: '2px'
-                }}>
+                <div className="learning-ipa">
                   {word.targetIpa && <span>{word.targetIpa}</span>}
                   {word.targetIpa && word.antonymIpa && <span> — </span>}
                   {word.antonymIpa && <span>{word.antonymIpa}</span>}
@@ -141,22 +205,13 @@ export const GameEngine: React.FC<GameEngineProps> = ({
               )}
               <div className="learning-spanish">{word.spanish}</div>
               {word.type && (
-                <div style={{
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  textAlign: 'center',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  marginTop: '5px'
-                }}>
-                  {word.type}
-                </div>
+                <div className="learning-type">{word.type}</div>
               )}
             </div>
           ))}
         </div>
         
-        <div style={{display: 'flex', gap: '15px', marginTop: '5px'}}>
+        <div className="learning-actions">
           {isBlockMode ? (
             /* Block mode: single clear start button */
             <>
@@ -229,7 +284,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             <div className="gameover-stat-value">{combo}</div>
           </div>
         </div>
-        <div style={{display: 'flex', gap: '15px'}}>
+        <div className="gameover-actions">
           <button className="btn btn-primary" onClick={resetGame}>
             <RotateCcw size={24} />
             REINTENTAR
@@ -246,75 +301,51 @@ export const GameEngine: React.FC<GameEngineProps> = ({
   // Si el estado es 'victory', mostramos pantalla de victoria
   if (gameState === 'victory') {
     if (isBlockMode) {
-      // Mid-session: loop not yet complete
-      if (sessionLoop < TOTAL_LOOPS) {
-        // Deduplicate missed words from this round
-        const roundMissedMap = new Map<string, WordPair>();
-        for (const w of missedWords) roundMissedMap.set(w.target, w);
-        const roundMissed = Array.from(roundMissedMap.values());
+      // Determine if this is the final mastery screen
+      const isFinalScreen = isConsolidation || (!isPlayMode && sessionLoop >= TOTAL_LOOPS);
+
+      if (!isFinalScreen) {
+        // Brief auto-advancing transition (3s timer running via useEffect)
+        const currentAccuracy = blockWords
+          ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+          : 0;
+        const isLastBeforeConsolidation = sessionLoop >= TOTAL_LOOPS && isPlayMode;
 
         return (
-          <div className="loop-complete-screen">
-            <div className="loop-complete-icon">✅</div>
-            <div className="loop-complete-title">
+          <div className="round-transition-screen">
+            <div className="round-transition-icon">✅</div>
+            <div className="round-transition-title">
               RONDA {sessionLoop}/{TOTAL_LOOPS} COMPLETADA
             </div>
-            <div className="loop-complete-stats">
-              <div className="loop-complete-stat">
-                <span className="loop-complete-stat-value">{score}</span>
-                <span className="loop-complete-stat-label">Puntos</span>
-              </div>
-              <div className="loop-complete-stat">
-                <span className="loop-complete-stat-value">
-                  {blockWords
-                    ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
-                    : 0}%
-                </span>
-                <span className="loop-complete-stat-label">Precisión</span>
-              </div>
+            <div className="round-transition-stats">
+              <span>{score} pts</span>
+              <span>{currentAccuracy}% precisión</span>
             </div>
-
-            {roundMissed.length > 0 ? (
-              <div className="loop-missed-review">
-                <div className="loop-missed-title">📝 Palabras a repasar:</div>
-                {roundMissed.map((w, i) => (
-                  <div key={i} className="loop-missed-word">
-                    <span className="loop-missed-target">{w.target}</span>
-                    <span className="loop-missed-arrow">↔</span>
-                    <span className="loop-missed-antonym">{w.antonym}</span>
-                    {w.spanish && <span className="loop-missed-spanish">({w.spanish})</span>}
-                  </div>
-                ))}
-                <div className="loop-missed-note">
-                  Estas palabras aparecerán con más frecuencia en la próxima ronda.
-                </div>
-              </div>
-            ) : (
-              <div className="loop-perfect">🌟 ¡Ronda perfecta! Sin errores.</div>
-            )}
-
-            <p className="loop-complete-hint">
-              {sessionLoop === 1
-                ? '¡Buen comienzo! Repite para afianzar las palabras.'
-                : '¡Casi ahí! Una ronda más para dominar el bloque.'}
-            </p>
-            <button className="btn btn-primary" onClick={handleNextLoop}>
-              <ArrowRight size={22} />
-              SIGUIENTE RONDA
-            </button>
+            <div className="round-transition-next">
+              {isLastBeforeConsolidation
+                ? '⚡ Preparando consolidación...'
+                : `Ronda ${sessionLoop + 1} en 3s...`}
+            </div>
+            <div className="round-transition-bar">
+              <div className="round-transition-bar-fill" />
+            </div>
           </div>
         );
       }
 
-      // Final loop — mastery!
+      // Final mastery screen
+      const finalWords = isConsolidation ? consolidationWords : (blockWords || []);
       const allScores = [...sessionScores, score];
       const totalScore = allScores.reduce((a, b) => a + b, 0);
 
-      // Final loop accuracy
-      const finalAccuracy = blockWords.length > 0
-        ? Math.round((blockWords.filter(w => studiedWords.has(w.target)).length / blockWords.length) * 100)
+      // Final accuracy based on the relevant word set
+      const finalAccuracy = finalWords.length > 0
+        ? Math.round((finalWords.filter(w => studiedWords.has(w.target)).length / finalWords.length) * 100)
         : 0;
       const allAccuracies = [...sessionAccuracies, finalAccuracy];
+
+      // Total rounds label
+      const totalRoundsPlayed = allScores.length;
 
       // Mastery level based on final accuracy
       let masteryIcon: string, masteryTitle: string, masteryColor: string;
@@ -333,7 +364,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
       const isPhaseComplete = phaseProgress.phaseCompleted;
 
       return (
-        <div className="block-results mastery-results">
+        <div className="block-results mastery-results mastery-scrollable">
           {/* Mastery level badge */}
           <div className="mastery-level" style={{ borderColor: masteryColor }}>
             <span className="mastery-level-icon">{masteryIcon}</span>
@@ -342,22 +373,31 @@ export const GameEngine: React.FC<GameEngineProps> = ({
 
           <div className="block-results-header">
             <div className="block-results-title victory">
-              ¡BLOQUE {blockIndex + 1} DOMINADO!
+              {isConsolidation
+                ? `¡DOMINAS BLOQUES 1-${(blockIndex ?? 0) + 1}!`
+                : `¡BLOQUE ${(blockIndex ?? 0) + 1} DOMINADO!`}
             </div>
             <div className="block-results-subtitle">
-              {TOTAL_LOOPS} rondas completadas • Precisión final: {finalAccuracy}%
+              {totalRoundsPlayed} rondas completadas
+              {isConsolidation ? ' + consolidación' : ''}
+              {' '}• Precisión final: {finalAccuracy}%
             </div>
           </div>
 
           {/* Per-loop summary */}
           <div className="mastery-loop-summary">
-            {allScores.map((s, i) => (
-              <div key={i} className="mastery-loop-row">
-                <span className="mastery-loop-label">Ronda {i + 1}</span>
-                <span className="mastery-loop-score">{s} pts</span>
-                <span className="mastery-loop-accuracy">{allAccuracies[i]}%</span>
-              </div>
-            ))}
+            {allScores.map((s, i) => {
+              const isConsolidationRow = isConsolidation && i === allScores.length - 1;
+              return (
+                <div key={i} className={`mastery-loop-row ${isConsolidationRow ? 'consolidation-row' : ''}`}>
+                  <span className="mastery-loop-label">
+                    {isConsolidationRow ? '⚡ Consolidación' : `Ronda ${i + 1}`}
+                  </span>
+                  <span className="mastery-loop-score">{s} pts</span>
+                  <span className="mastery-loop-accuracy">{allAccuracies[i]}%</span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="block-results-stats">
@@ -370,14 +410,21 @@ export const GameEngine: React.FC<GameEngineProps> = ({
               <div className="block-results-stat-label">Precisión</div>
             </div>
             <div className="block-results-stat">
-              <div className="block-results-stat-value">{TOTAL_LOOPS}/{TOTAL_LOOPS}</div>
-              <div className="block-results-stat-label">Rondas</div>
+              <div className="block-results-stat-value">{finalWords.length}</div>
+              <div className="block-results-stat-label">Palabras</div>
             </div>
           </div>
 
-          {/* Word list from final loop */}
+          {/* Consolidation banner */}
+          {isConsolidation && (
+            <div className="consolidation-banner">
+              ⚡ Consolidación: {finalWords.length} palabras de bloques 1-{(blockIndex ?? 0) + 1}
+            </div>
+          )}
+
+          {/* Word list — scrollable */}
           <div className="block-results-words">
-            {blockWords.map((word, idx) => {
+            {finalWords.map((word, idx) => {
               const isCorrectWord = studiedWords.has(word.target);
               return (
                 <div key={idx} className={`block-results-word ${isCorrectWord ? 'correct' : 'missed'}`}>
@@ -401,8 +448,8 @@ export const GameEngine: React.FC<GameEngineProps> = ({
 
           <div className="mastery-message">
             {masteryIcon} {finalAccuracy >= 80
-              ? `¡Dominio demostrado de estas ${blockWords.length} palabras!`
-              : `Sigue practicando para dominar estas ${blockWords.length} palabras.`}
+              ? `¡Dominio demostrado de estas ${finalWords.length} palabras!`
+              : `Sigue practicando para dominar estas ${finalWords.length} palabras.`}
           </div>
 
           {/* Phase completion banner */}
@@ -423,7 +470,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
               <RotateCcw size={20} />
               REPETIR
             </button>
-            {onNextBlock && (
+            {onNextBlock && !isConsolidation && (
               <button className="btn btn-primary" onClick={onNextBlock}>
                 <ArrowRight size={20} />
                 SIGUIENTE BLOQUE
@@ -433,23 +480,22 @@ export const GameEngine: React.FC<GameEngineProps> = ({
               <X size={20} />
               BLOQUES
             </button>
+            {onHome && (
+              <button className="btn btn-home" onClick={onHome}>
+                <Home size={20} />
+                MENÚ PRINCIPAL
+              </button>
+            )}
           </div>
         </div>
       );
     }
     return (
       <div className="gameover-screen">
-        <div className="gameover-title" style={{color: '#ffd700'}}>
+        <div className="gameover-title victory-title">
           🎉 ¡VICTORIA! 🎉
         </div>
-        <div style={{
-          fontSize: '32px',
-          color: '#00ff87',
-          fontFamily: 'Orbitron, sans-serif',
-          fontWeight: 700,
-          marginBottom: '30px',
-          textAlign: 'center'
-        }}>
+        <div className="victory-subtitle">
           ¡YA DOMINAS {studiedWords.size} PALABRAS DE ESTA FASE!
         </div>
         <div className="gameover-stats">
@@ -462,7 +508,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             <div className="gameover-stat-value">{studiedWords.size}</div>
           </div>
         </div>
-        <div style={{display: 'flex', gap: '15px'}}>
+        <div className="gameover-actions">
           <button className="btn btn-primary" onClick={resetGame}>
             <RotateCcw size={24} />
             VOLVER A EMPEZAR
@@ -525,7 +571,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             {gameState === 'training' ? (
               <div className="stat-item">
                 <div className="stat-label">Modo</div>
-                <div className="stat-value" style={{color: '#00ff87'}}>
+                <div className="stat-value stat-value--training">
                   PRÁCTICA
                 </div>
               </div>
@@ -542,8 +588,8 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             {isBlockMode && (
               <div className="stat-item">
                 <div className="stat-label">Ronda</div>
-                <div className="stat-value" style={{color: '#ffd700', fontSize: '20px'}}>
-                  {sessionLoop}/{TOTAL_LOOPS}
+                <div className="stat-value stat-value--round">
+                  {isConsolidation ? '⚡' : `${sessionLoop}/${TOTAL_LOOPS}`}
                 </div>
               </div>
             )}
@@ -580,17 +626,19 @@ export const GameEngine: React.FC<GameEngineProps> = ({
             </div>
           )}
 
+          {/* Progress climber — block mode only (hide during consolidation) */}
+          {isBlockMode && blockWords && !isConsolidation && (
+            <ProgressClimber
+              totalFloors={blockWords.length}
+              floorsClimbed={Math.min(correctCount, blockWords.length)}
+              loop={sessionLoop}
+              totalLoops={TOTAL_LOOPS}
+            />
+          )}
+
           <div className="game-area">
             {fallingWords.length === 0 && currentWord && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                color: 'rgba(255,255,255,0.5)',
-                fontSize: '18px',
-                textAlign: 'center'
-              }}>
+              <div className="game-area-loading">
                 Cargando palabras...
               </div>
             )}
@@ -634,7 +682,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
         {isPaused && (
           <div className="pause-overlay">
             <div className="pause-title">⏸️ PAUSA</div>
-            <div style={{display: 'flex', gap: '20px'}}>
+            <div className="pause-actions">
               <button className="btn btn-primary" onClick={togglePause}>
                 <Play size={24} />
                 CONTINUAR
