@@ -254,8 +254,8 @@ const setupStyles = `
   color: #fff;
   padding: 30px 20px;
   padding-bottom: max(100px, env(safe-area-inset-bottom, 100px));
-  overflow-y: auto;
   overflow-x: hidden;
+  /* overflow-y scroll is handled by the html element */
 }
 .setup-page--error {
   display: flex;
