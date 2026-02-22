@@ -426,7 +426,9 @@ export const useGameLogic = (
         text: cw.antonym,
         points: `+${points}`,
         ipa: cw.antonymIpa || undefined,
-        spanish: cw.spanish
+        spanish: cw.spanish,
+        targetWord: cw.target,
+        targetIpa: cw.targetIpa || undefined,
       });
       
       setTimeout(() => {

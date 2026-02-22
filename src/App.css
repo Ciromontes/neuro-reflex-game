@@ -20,9 +20,11 @@ body {
 .game-container {
   width: 100vw;
   height: 100vh;
+  background-color: #0a0e27; /* solid fallback for slow gradient paint on mobile */
   background: linear-gradient(135deg, #0a0e27 0%, #1a1d3d 50%, #0f1428 100%);
   position: relative;
   overflow: hidden;
+  color: #fff; /* ensure all text defaults to white */
 }
 
 .game-container::before {
@@ -355,10 +357,13 @@ body {
   font-family: 'Orbitron', sans-serif;
   font-size: 56px;
   font-weight: 900;
+  /* Solid fallback color first — if background-clip fails on mobile, text is still visible */
+  color: #00ff87;
   background: linear-gradient(135deg, #00ff87, #00d4ff);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 40px rgba(0, 255, 135, 0.3);
+  filter: drop-shadow(0 0 20px rgba(0, 255, 135, 0.5));
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -464,6 +469,23 @@ body {
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
 }
 
+/* ── Feedback backdrop (dims the game area so cards read clearly) ── */
+.feedback-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(5, 8, 30, 0.72);
+  pointer-events: none;
+  animation: backdropFade 2s forwards;
+}
+@keyframes backdropFade {
+  0%  { opacity: 0; }
+  10% { opacity: 1; }
+  80% { opacity: 1; }
+  100%{ opacity: 0; }
+}
+
+/* ── Feedback card ── */
 .feedback {
   position: fixed;
   top: 50%;
@@ -472,16 +494,95 @@ body {
   z-index: 1500;
   text-align: center;
   pointer-events: none;
-  animation: feedbackPop 2s;
-  max-width: 80%;
-  padding: 20px;
+  animation: feedbackPop 2s forwards;
+  width: min(92vw, 380px);
+  background: rgba(10, 14, 39, 0.92);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  padding: 24px 20px 20px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
 }
 
 @keyframes feedbackPop {
-  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-  15% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-  85% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  15%  { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+  80%  { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+}
+
+/* ── Correct: pair view ── */
+.feedback-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.feedback-pair__item {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.feedback-pair__target {
+  background: rgba(0, 255, 135, 0.08);
+  border: 1px solid rgba(0, 255, 135, 0.25);
+}
+
+.feedback-pair__antonym {
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+}
+
+.feedback-pair__word {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+
+.feedback-pair__target .feedback-pair__word {
+  color: #00ff87;
+  text-shadow: 0 0 20px rgba(0, 255, 135, 0.5);
+}
+
+.feedback-pair__antonym .feedback-pair__word {
+  color: #00d4ff;
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+.feedback-pair__spanish {
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  margin-top: 3px;
+  font-style: italic;
+}
+
+.feedback-pair__ipa {
+  font-family: 'Segoe UI', 'Noto Sans', sans-serif;
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.feedback-pair__divider {
+  font-size: 18px;
+  color: rgba(255,255,255,0.3);
+  line-height: 1;
+  margin: 2px 0;
+}
+
+.feedback-points--correct {
+  margin-top: 10px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
 }
 
 .feedback-text {

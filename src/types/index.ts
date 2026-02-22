@@ -117,10 +117,14 @@ export interface Feedback {
   type: 'correct' | 'wrong' | 'missed' | 'levelup';
   text: string;
   points: string;
-  /** Optional IPA transcription shown smaller below text */
+  /** Optional IPA transcription of the antonym */
   ipa?: string;
-  /** Spanish meaning shown in feedback column */
+  /** Spanish meaning shown in feedback (e.g. "Encender – Apagar") */
   spanish?: string;
+  /** Target word shown in correct feedback pair view */
+  targetWord?: string;
+  /** IPA of the target word */
+  targetIpa?: string;
 }
 
 export interface Particle {

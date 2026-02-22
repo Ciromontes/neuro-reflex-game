@@ -703,18 +703,51 @@ export const GameEngine: React.FC<GameEngineProps> = ({
         )}
 
         {/* Feedback */}
-        {feedback && (
-          <div className={`feedback ${feedback.type}`}>
-            <div className="feedback-text">{feedback.text}</div>
-            {feedback.ipa && (
-              <div className="feedback-ipa">{feedback.ipa}</div>
-            )}
-            {feedback.spanish && (
-              <div className="feedback-spanish">{feedback.spanish}</div>
-            )}
-            <div className="feedback-points">{feedback.points}</div>
-          </div>
-        )}
+        {feedback && (() => {
+          // Split "Encender – Apagar" → ["Encender", "Apagar"]
+          const sp = feedback.spanish?.split(/\s*[–—\-]\s*/) ?? [];
+          return (
+            <>
+              {/* Dark backdrop so falling words don't bleed through */}
+              <div className="feedback-backdrop" />
+              <div className={`feedback ${feedback.type}`}>
+                {feedback.type === 'correct' ? (
+                  <div className="feedback-pair">
+                    {/* Target word row */}
+                    <div className="feedback-pair__item feedback-pair__target">
+                      <div className="feedback-pair__word">{feedback.targetWord}</div>
+                      {sp[0] && <div className="feedback-pair__spanish">{sp[0].trim()}</div>}
+                      {feedback.targetIpa && (
+                        <div className="feedback-pair__ipa">{feedback.targetIpa}</div>
+                      )}
+                    </div>
+                    <div className="feedback-pair__divider">⟷</div>
+                    {/* Antonym row */}
+                    <div className="feedback-pair__item feedback-pair__antonym">
+                      <div className="feedback-pair__word">{feedback.text}</div>
+                      {sp[1] && <div className="feedback-pair__spanish">{sp[1].trim()}</div>}
+                      {feedback.ipa && (
+                        <div className="feedback-pair__ipa">{feedback.ipa}</div>
+                      )}
+                    </div>
+                    <div className="feedback-points feedback-points--correct">{feedback.points}</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="feedback-text">{feedback.text}</div>
+                    {feedback.ipa && (
+                      <div className="feedback-ipa">{feedback.ipa}</div>
+                    )}
+                    {feedback.spanish && (
+                      <div className="feedback-spanish">{feedback.spanish}</div>
+                    )}
+                    <div className="feedback-points">{feedback.points}</div>
+                  </>
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Particles */}
         {particles.map(particle => (
