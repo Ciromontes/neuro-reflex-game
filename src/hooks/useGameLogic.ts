@@ -53,6 +53,10 @@ export const useGameLogic = (
   const wordQueueRef = useRef<number[]>([]);
   const availableWordsRef = useRef<WordPair[]>([]);
   const currentCycleRef = useRef<WordPair[]>([]);
+  // Previene doble inicialización por cambio de deps durante arranque
+  const hasStartedRef = useRef(false);
+  // Previene que handleMissedWord corra después de un click correcto (race condition)
+  const wordClickedRef = useRef(false);
 
   // Refs para romper dependencias circulares entre callbacks
   const nextWordRef = useRef<() => void>(() => {});
@@ -142,33 +146,37 @@ export const useGameLogic = (
     return words;
   }, [activeWords, phase.distractorWords, phase.mechanic]);
 
-  // Sintetizar voz
+  // Sintetizar voz (compatible con iOS Safari)
   const speakWord = useCallback((word: string, rate = 1) => {
     if (!soundEnabled || !window.speechSynthesis) return;
-    
+
+    // iOS pausa la síntesis si la página pierde foco — hay que reanudar antes
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = 'en-US';
     utterance.rate = rate;
-    
-    const setVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(voice => 
-        voice.lang === 'en-US' || 
-        voice.lang === 'en-GB' || 
-        voice.lang.startsWith('en-')
+    utterance.volume = 1;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      const englishVoice = voices.find(v =>
+        v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-')
       );
       if (englishVoice) utterance.voice = englishVoice;
-      
-      setTimeout(() => {
-        window.speechSynthesis.speak(utterance);
-      }, 10);
-    };
-    
-    if (window.speechSynthesis.getVoices().length > 0) {
-      setVoice();
+      // Speak synchronously dentro del gesto del usuario (requerido por iOS)
+      window.speechSynthesis.speak(utterance);
     } else {
-      window.speechSynthesis.onvoiceschanged = setVoice;
+      // Voces no cargadas aún — esperar y hablar cuando estén listas
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v2 = window.speechSynthesis.getVoices();
+        const eng = v2.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+        if (eng) utterance.voice = eng;
+        window.speechSynthesis.speak(utterance);
+      };
     }
   }, [soundEnabled]);
 
@@ -229,6 +237,7 @@ export const useGameLogic = (
     setCurrentWord(nextWordData);
     
     setTimeout(() => {
+      wordClickedRef.current = false; // nueva palabra → resetear guard
       const words = generateFallingWords(nextWordData);
       setFallingWords(words);
 
@@ -259,6 +268,8 @@ export const useGameLogic = (
     const cw = currentWordRef.current;
     
     if (!['training', 'easy', 'medium', 'hard'].includes(gs) || paused || !cw) return;
+    // Si la palabra ya fue contestada correctamente, ignorar (race condition con click)
+    if (wordClickedRef.current) return;
 
     setFallingWords([]);
 
@@ -311,6 +322,9 @@ export const useGameLogic = (
     const cw = currentWordRef.current;
     
     if (!['training', 'easy', 'medium', 'hard'].includes(gs) || paused || !cw) return;
+    // Marcar como clickeada para bloquear handleMissedWord simultáneo
+    if (wordClickedRef.current) return;
+    wordClickedRef.current = true;
 
     // Limpiar timer inmediatamente
     if (fallTimerRef.current) {
@@ -479,6 +493,8 @@ export const useGameLogic = (
     setDifficulty('easy');
     // Si hay seedWords, inicializar queue para que la primera inserción ocurra tras 1 palabra normal
     wordQueueRef.current = seedWords && seedWords.length > 0 ? [1] : [];
+    hasStartedRef.current = false; // permitir que el useEffect inicie la primera palabra
+    wordClickedRef.current = false;
     initializeWordCycle();
   }, [phase.difficultyLevels, initializeWordCycle]);
 
@@ -501,6 +517,8 @@ export const useGameLogic = (
     setStudiedWords(new Set());
     setWordsOverride(null);
     wordQueueRef.current = [];
+    hasStartedRef.current = false;
+    wordClickedRef.current = false;
     if (fallTimerRef.current) {
       clearTimeout(fallTimerRef.current);
       fallTimerRef.current = null;
@@ -521,12 +539,17 @@ export const useGameLogic = (
   // Iniciar palabras cuando comienza el juego
   useEffect(() => {
     if (['training', 'easy', 'medium', 'hard'].includes(gameState) && !currentWord) {
+      // Evitar doble inicialización si deps cambian durante el arranque
+      if (hasStartedRef.current) return;
+      hasStartedRef.current = true;
+
       initializeWordCycle();
       
       const timer = setTimeout(() => {
         const firstWord = availableWordsRef.current[0];
         if (!firstWord) return;
         
+        wordClickedRef.current = false; // primera palabra → resetear guard
         setCurrentWord(firstWord);
         
         const words = generateFallingWords(firstWord);

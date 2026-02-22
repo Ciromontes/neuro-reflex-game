@@ -8,6 +8,43 @@ const LearningPage: React.FC = () => {
   const navigate = useNavigate();
   
   const phase = getPhaseById(parseInt(phaseId || '1'));
+
+  // Reproduce target y antonym en inglés al tocar la tarjeta
+  const speakWordPair = (target: string, antonym: string) => {
+    if (!window.speechSynthesis) return;
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+
+    const voices = window.speechSynthesis.getVoices();
+    const eng = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+
+    const speak = (text: string, onEnd?: () => void) => {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'en-US';
+      utt.rate = 0.9;
+      if (eng) utt.voice = eng;
+      if (onEnd) utt.onend = onEnd;
+      window.speechSynthesis.speak(utt);
+    };
+
+    if (voices.length > 0) {
+      speak(target, () => setTimeout(() => speak(antonym), 400));
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v2 = window.speechSynthesis.getVoices();
+        const eng2 = v2.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+        const speak2 = (text: string, onEnd?: () => void) => {
+          const utt = new SpeechSynthesisUtterance(text);
+          utt.lang = 'en-US';
+          utt.rate = 0.9;
+          if (eng2) utt.voice = eng2;
+          if (onEnd) utt.onend = onEnd;
+          window.speechSynthesis.speak(utt);
+        };
+        speak2(target, () => setTimeout(() => speak2(antonym), 400));
+      };
+    }
+  };
   
   if (!phase) {
     return (
@@ -327,7 +364,14 @@ const LearningPage: React.FC = () => {
         <div className="words-list">
           <div className="words-grid">
             {phase.wordPairs.map((word, idx) => (
-              <div key={idx} className="word-card">
+              <div
+                key={idx}
+                className="word-card"
+                onClick={() => speakWordPair(word.target, word.antonym)}
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                title="Toca para escuchar"
+              >
+                <div style={{ fontSize: '14px', marginBottom: '4px', opacity: 0.6, textAlign: 'right' }}>🔊</div>
                 <div className="word-pair">
                   <span>{word.target}</span>
                   <span>↔</span>
