@@ -16,6 +16,38 @@ const PhaseSetupPage: React.FC = () => {
 
   const phase = getPhaseById(parseInt(phaseId || '1'));
 
+  // ── Audio: reproduce target + antonym en inglés ──
+  const speakWordPair = (target: string, antonym: string) => {
+    if (!window.speechSynthesis) return;
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices();
+    const eng = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+    const speak = (text: string, onEnd?: () => void) => {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'en-US'; utt.rate = 0.9;
+      if (eng) utt.voice = eng;
+      if (onEnd) utt.onend = onEnd;
+      window.speechSynthesis.speak(utt);
+    };
+    if (voices.length > 0) {
+      speak(target, () => setTimeout(() => speak(antonym), 400));
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v2 = window.speechSynthesis.getVoices();
+        const eng2 = v2.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+        const speak2 = (text: string, onEnd?: () => void) => {
+          const utt = new SpeechSynthesisUtterance(text);
+          utt.lang = 'en-US'; utt.rate = 0.9;
+          if (eng2) utt.voice = eng2;
+          if (onEnd) utt.onend = onEnd;
+          window.speechSynthesis.speak(utt);
+        };
+        speak2(target, () => setTimeout(() => speak2(antonym), 400));
+      };
+    }
+  };
+
   const totalPairs = phase?.wordPairs.length ?? 0;
   const progress = useMemo(
     () => (phase ? getPhaseProgress(phase.id, totalPairs) : null),
@@ -40,6 +72,16 @@ const PhaseSetupPage: React.FC = () => {
   const handleSpeedChange = (level: SpeedLevel) => {
     setSpeed(level);
     saveSpeedLevel(phase.id, level, totalPairs);
+  };
+
+  // Doble tap en un bloque ya seleccionado → entra directo al juego
+  const handleSelectBlock = (index: number) => {
+    if (selectedBlock === index) {
+      const modeParam = activeTab === 'training' ? 'training' : 'play';
+      navigate(`/play/${phase.id}/block/${index}?speed=${speed}&mode=${modeParam}`);
+    } else {
+      setSelectedBlock(index);
+    }
   };
 
   const handlePlay = () => {
@@ -118,7 +160,14 @@ const PhaseSetupPage: React.FC = () => {
             </p>
             <div className="review-grid__cards">
               {phase.wordPairs.map((wp, i) => (
-                <div key={i} className="review-card">
+                <div
+                  key={i}
+                  className="review-card"
+                  onClick={() => speakWordPair(wp.target, wp.antonym)}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Toca para escuchar"
+                >
+                  <div style={{ fontSize: '12px', textAlign: 'right', opacity: 0.5 }}>🔊</div>
                   <div className="review-card__target">{wp.target}</div>
                   {wp.targetIpa && (
                     <div className="review-card__ipa">{wp.targetIpa}</div>
@@ -154,7 +203,7 @@ const PhaseSetupPage: React.FC = () => {
               phase={phase}
               blocks={progress.blocks}
               selectedBlock={selectedBlock}
-              onSelectBlock={setSelectedBlock}
+              onSelectBlock={handleSelectBlock}
             />
 
             {/* Speed Control */}
@@ -162,6 +211,16 @@ const PhaseSetupPage: React.FC = () => {
 
             {/* Action button */}
             <div className="setup-page__actions">
+              {selectedBlock === null && (
+                <p className="setup-page__guide-hint">
+                  👆 Selecciona un bloque y luego presiona el botón
+                </p>
+              )}
+              {selectedBlock !== null && (
+                <p className="setup-page__guide-hint setup-page__guide-hint--selected">
+                  💡 Toca el bloque {selectedBlock + 1} otra vez para entrar directo
+                </p>
+              )}
               <button
                 className={`setup-page__btn-play ${activeTab === 'training' ? 'setup-page__btn-play--training' : 'setup-page__btn-play--play'}`}
                 disabled={selectedBlock === null}
@@ -170,7 +229,7 @@ const PhaseSetupPage: React.FC = () => {
                 <Play size={22} />
                 {selectedBlock !== null
                   ? `${activeTab === 'training' ? 'ENTRENAR' : 'JUGAR'} BLOQUE ${selectedBlock + 1}`
-                  : 'SELECCIONA UN BLOQUE'}
+                  : `SELECCIONA UN BLOQUE`}
               </button>
             </div>
           </>
@@ -189,11 +248,12 @@ const setupStyles = `
 /* ======== PAGE ======== */
 .setup-page {
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   background: linear-gradient(135deg, #0a0e27 0%, #1a1d3d 50%, #0f1428 100%);
   font-family: 'Space Mono', monospace;
   color: #fff;
-  padding: 30px 20px 60px;
+  padding: 30px 20px;
+  padding-bottom: max(100px, env(safe-area-inset-bottom, 100px));
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -652,6 +712,19 @@ const setupStyles = `
   cursor: not-allowed;
   background: rgba(255,255,255,0.2);
   color: rgba(255,255,255,0.4);
+}
+
+/* Guide hint text */
+.setup-page__guide-hint {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+.setup-page__guide-hint--selected {
+  color: #00ff87;
+  opacity: 0.8;
 }
 
 /* ======== RESPONSIVE ======== */

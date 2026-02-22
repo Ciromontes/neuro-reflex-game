@@ -69,12 +69,13 @@ const LearningPage: React.FC = () => {
 
         .learning-container {
           width: 100vw;
-          height: 100vh;
+          min-height: 100vh;
           background: linear-gradient(135deg, #0a0e27 0%, #1a1d3d 50%, #0f1428 100%);
           position: relative;
           overflow: auto;
           font-family: 'Space Mono', monospace;
           padding: 40px 20px;
+          padding-bottom: max(100px, env(safe-area-inset-bottom, 100px));
         }
 
         .learning-container::before {
