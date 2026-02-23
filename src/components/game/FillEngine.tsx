@@ -401,7 +401,12 @@ const FillEngine: React.FC<FillEngineProps> = ({
         </button>
         <div className="fill-header__info">
           <span className="fill-header__phase">{phase.icon} Fase {phase.id}</span>
-          <span className="fill-header__block">Bloque {blockIndex + 1}</span>
+          <span className="fill-header__block">
+            Bloque {blockIndex + 1}
+            <span className={`fill-header__diff ${isEasy ? '' : 'fill-header__diff--hard'}`}>
+              {isEasy ? ' · FÁCIL' : ' · DIFÍCIL'}
+            </span>
+          </span>
         </div>
         <div className="fill-header__score-area">
           <span className="fill-header__pts">{score} pts</span>
@@ -601,6 +606,8 @@ const fillStyles = `
   font-weight: 700;
   color: #bf5af2;
 }
+.fill-header__diff { color: #00ff87; font-size: 11px; }
+.fill-header__diff--hard { color: #ff3d00; }
 .fill-header__score-area {
   display: flex;
   flex-direction: column;

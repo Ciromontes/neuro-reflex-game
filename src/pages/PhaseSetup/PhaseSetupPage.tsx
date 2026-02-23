@@ -55,6 +55,7 @@ const PhaseSetupPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabMode>('review');
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
   const [wpb, setWpb] = useState<number>(getWordsPerBlock());
+  const [fillDifficulty, setFillDifficulty] = useState<'easy' | 'hard'>('easy');
 
   const progress = useMemo(
     () => (phase ? getPhaseProgress(phase.id, totalPairs) : null),
@@ -97,7 +98,8 @@ const PhaseSetupPage: React.FC = () => {
     }
     if (selectedBlock === index) {
       const modeParam = activeTab === 'training' ? 'training' : activeTab === 'completar' ? 'completar' : 'play';
-      navigate(`/play/${phase.id}/block/${index}?speed=${speed}&mode=${modeParam}`);
+      const diffParam = activeTab === 'completar' ? `&difficulty=${fillDifficulty}` : '';
+      navigate(`/play/${phase.id}/block/${index}?speed=${speed}&mode=${modeParam}${diffParam}`);
     } else {
       setSelectedBlock(index);
     }
@@ -106,7 +108,8 @@ const PhaseSetupPage: React.FC = () => {
   const handlePlay = () => {
     if (selectedBlock === null) return;
     const modeParam = activeTab === 'training' ? 'training' : activeTab === 'completar' ? 'completar' : 'play';
-    navigate(`/play/${phase.id}/block/${selectedBlock}?speed=${speed}&mode=${modeParam}`);
+    const diffParam = activeTab === 'completar' ? `&difficulty=${fillDifficulty}` : '';
+    navigate(`/play/${phase.id}/block/${selectedBlock}?speed=${speed}&mode=${modeParam}${diffParam}`);
   };
 
   const phaseHasSentences = hasSentences(phase.id);
@@ -210,10 +213,26 @@ const PhaseSetupPage: React.FC = () => {
 
         {/* --- COMPLETAR (fill-in-the-blank) --- */}
         {activeTab === 'completar' && (
-          <>
+          <>  
             <p className="setup-mode-hint setup-mode-hint--completar">
               ✏️ Completa la frase con la palabra correcta — usa el teclado
             </p>
+
+            {/* Difficulty toggle */}
+            <div className="fill-diff-toggle">
+              <button
+                className={`fill-diff-toggle__btn ${fillDifficulty === 'easy' ? 'fill-diff-toggle__btn--active' : ''}`}
+                onClick={() => setFillDifficulty('easy')}
+              >
+                🟢 FÁCIL
+              </button>
+              <button
+                className={`fill-diff-toggle__btn ${fillDifficulty === 'hard' ? 'fill-diff-toggle__btn--active fill-diff-toggle__btn--hard' : ''}`}
+                onClick={() => setFillDifficulty('hard')}
+              >
+                🔴 DIFÍCIL
+              </button>
+            </div>
 
             {/* Chunk size control */}
             <div className="chunk-ctrl">
@@ -575,6 +594,39 @@ const setupStyles = `
   background: rgba(191,90,242,0.08);
   border: 1px solid rgba(191,90,242,0.2);
   color: rgba(255,255,255,0.8);
+}
+
+/* Difficulty toggle for COMPLETAR tab */
+.fill-diff-toggle {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.fill-diff-toggle__btn {
+  flex: 1;
+  max-width: 140px;
+  padding: 10px 16px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 50px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.5);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.fill-diff-toggle__btn--active {
+  background: rgba(0,255,135,0.15);
+  border-color: #00ff87;
+  color: #00ff87;
+}
+.fill-diff-toggle__btn--hard {
+  background: rgba(255,61,0,0.15);
+  border-color: #ff3d00;
+  color: #ff3d00;
 }
 
 /* ============================================================

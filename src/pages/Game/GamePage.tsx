@@ -33,6 +33,7 @@ const GamePage: React.FC = () => {
   const modeParam = searchParams.get('mode');
   const isCompletarMode = modeParam === 'completar';
   const blockGameMode: 'training' | 'play' = modeParam === 'play' ? 'play' : 'training';
+  const fillDifficulty: 'easy' | 'hard' = searchParams.get('difficulty') === 'hard' ? 'hard' : 'easy';
 
   // Palabras del bloque (o todas si es modo legado)
   const blockWords = useMemo(() => {
@@ -124,6 +125,7 @@ const GamePage: React.FC = () => {
           onNextBlock={hasNextBlock ? handleNextBlock : undefined}
           onExit={handleExit}
           onHome={handleHome}
+          difficulty={fillDifficulty}
         />
       ) : (
         <GameEngine
