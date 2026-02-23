@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Phase, BlockProgress } from '../../types';
-import { BLOCK_SIZE } from '../../types';
+import { getWordsPerBlock } from '../../types';
 import { getBlockWords } from '../../utils/blockHelpers';
 
 interface BlockSelectorProps {
@@ -20,7 +20,7 @@ const BlockSelector: React.FC<BlockSelectorProps> = ({
     <div className="block-selector">
       <h3 className="block-selector__title">SELECCIONA UN BLOQUE</h3>
       <p className="block-selector__subtitle">
-        {phase.wordPairs.length} palabras · {blocks.length} bloques de {BLOCK_SIZE}
+        {phase.wordPairs.length} palabras · {blocks.length} bloques de {getWordsPerBlock()}
       </p>
 
       <div className="block-selector__grid">

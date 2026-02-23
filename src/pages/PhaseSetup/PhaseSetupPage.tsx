@@ -6,7 +6,8 @@ import { getBlockCount, getBlockWords } from '../../utils/blockHelpers';
 import BlockSelector from '../../components/phase-selection/BlockSelector';
 import SpeedControl from '../../components/phase-selection/SpeedControl';
 import type { SpeedLevel } from '../../types';
-import { ArrowLeft, BookOpen, Target, Gamepad2, Play } from 'lucide-react';
+import { getWordsPerBlock, saveWordsPerBlock, MIN_BLOCK_SIZE, MAX_BLOCK_SIZE } from '../../types';
+import { ArrowLeft, BookOpen, Target, Gamepad2, Play, ChevronUp, ChevronDown } from 'lucide-react';
 
 type TabMode = 'review' | 'training' | 'play';
 
@@ -49,13 +50,16 @@ const PhaseSetupPage: React.FC = () => {
   };
 
   const totalPairs = phase?.wordPairs.length ?? 0;
-  const progress = useMemo(
-    () => (phase ? getPhaseProgress(phase.id, totalPairs) : null),
-    [phase, totalPairs]
-  );
 
   const [activeTab, setActiveTab] = useState<TabMode>('review');
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
+  const [wpb, setWpb] = useState<number>(getWordsPerBlock());
+
+  const progress = useMemo(
+    () => (phase ? getPhaseProgress(phase.id, totalPairs) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [phase, totalPairs, wpb]
+  );
   const [speed, setSpeed] = useState<SpeedLevel>(progress?.speedLevel ?? 3);
 
   if (!phase || !progress) {
@@ -72,6 +76,15 @@ const PhaseSetupPage: React.FC = () => {
   const handleSpeedChange = (level: SpeedLevel) => {
     setSpeed(level);
     saveSpeedLevel(phase.id, level, totalPairs);
+  };
+
+  /** Cambia el tamaño de bloque (3-5) y recalcula bloques + progreso */
+  const handleChangeWpb = (delta: number) => {
+    const next = Math.max(MIN_BLOCK_SIZE, Math.min(MAX_BLOCK_SIZE, wpb + delta));
+    if (next === wpb) return;
+    saveWordsPerBlock(next);
+    setWpb(next);
+    setSelectedBlock(null); // los índices cambian, deseleccionar
   };
 
   // Doble tap en un bloque ya seleccionado → entra directo al juego
@@ -202,6 +215,30 @@ const PhaseSetupPage: React.FC = () => {
                 🎮 Pon a prueba tu memoria — sin pistas, sin ayuda
               </p>
             )}
+
+            {/* Chunk size control */}
+            <div className="chunk-ctrl">
+              <span className="chunk-ctrl__label">🧠 Palabras por bloque</span>
+              <div className="chunk-ctrl__stepper">
+                <button
+                  className="chunk-ctrl__btn"
+                  onClick={() => handleChangeWpb(-1)}
+                  disabled={wpb <= MIN_BLOCK_SIZE}
+                  aria-label="Reducir palabras"
+                >
+                  <ChevronDown size={20} />
+                </button>
+                <span className="chunk-ctrl__value">{wpb}</span>
+                <button
+                  className="chunk-ctrl__btn"
+                  onClick={() => handleChangeWpb(1)}
+                  disabled={wpb >= MAX_BLOCK_SIZE}
+                  aria-label="Aumentar palabras"
+                >
+                  <ChevronUp size={20} />
+                </button>
+              </div>
+            </div>
 
             {/* Block Selector */}
             <BlockSelector
@@ -451,6 +488,60 @@ const setupStyles = `
   background: rgba(255,107,53,0.08);
   border: 1px solid rgba(255,107,53,0.2);
   color: rgba(255,255,255,0.8);
+}
+
+/* ============================================================
+   CHUNK SIZE CONTROL  (▲/▼ words per block)
+   ============================================================ */
+.chunk-ctrl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(0,255,135,0.06);
+  border: 1px solid rgba(0,255,135,0.15);
+}
+.chunk-ctrl__label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  white-space: nowrap;
+}
+.chunk-ctrl__stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chunk-ctrl__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,255,135,0.3);
+  background: rgba(0,255,135,0.08);
+  color: #00ff87;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.chunk-ctrl__btn:active:not(:disabled) {
+  transform: scale(0.92);
+  background: rgba(0,255,135,0.18);
+}
+.chunk-ctrl__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.chunk-ctrl__value {
+  font-family: 'Orbitron', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: #00ff87;
+  min-width: 30px;
+  text-align: center;
 }
 
 /* ============================================================

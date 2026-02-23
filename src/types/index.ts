@@ -43,8 +43,30 @@ export interface Phase {
 // SISTEMA DE BLOQUES
 // ============================================================
 
-/** Tamaño fijo de cada bloque de palabras */
-export const BLOCK_SIZE = 5;
+/** Tamaño por defecto de cada bloque de palabras (basado en chunking cognitivo) */
+export const DEFAULT_BLOCK_SIZE = 4;
+export const MIN_BLOCK_SIZE = 3;
+export const MAX_BLOCK_SIZE = 5;
+
+/** @deprecated — usa getWordsPerBlock() */
+export const BLOCK_SIZE = DEFAULT_BLOCK_SIZE;
+
+const WPB_KEY = 'neuro-reflex-wordsPerBlock';
+
+/** Lee el tamaño de bloque elegido por el usuario (3-5, default 4) */
+export function getWordsPerBlock(): number {
+  try {
+    const v = parseInt(localStorage.getItem(WPB_KEY) || '');
+    if (v >= MIN_BLOCK_SIZE && v <= MAX_BLOCK_SIZE) return v;
+  } catch { /* ignored */ }
+  return DEFAULT_BLOCK_SIZE;
+}
+
+/** Guarda el tamaño de bloque elegido (3-5) */
+export function saveWordsPerBlock(size: number): void {
+  const clamped = Math.max(MIN_BLOCK_SIZE, Math.min(MAX_BLOCK_SIZE, size));
+  localStorage.setItem(WPB_KEY, String(clamped));
+}
 
 /** Niveles de velocidad disponibles para el usuario */
 export const SPEED_LEVELS = [

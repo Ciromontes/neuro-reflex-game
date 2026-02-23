@@ -3,7 +3,7 @@
  * Servicio de persistencia en localStorage para progreso de fases y bloques.
  */
 import type { PhaseProgress, BlockProgress, SpeedLevel } from '../types';
-import { BLOCK_SIZE } from '../types';
+import { getWordsPerBlock } from '../types';
 
 const STORAGE_KEY = 'neuro-reflex-progress';
 
@@ -32,7 +32,7 @@ function saveAllProgress(data: Record<number, PhaseProgress>): void {
 
 /** Calcula cuántos bloques tiene una fase dado el total de pares */
 export function getBlockCount(totalPairs: number): number {
-  return Math.ceil(totalPairs / BLOCK_SIZE);
+  return Math.ceil(totalPairs / getWordsPerBlock());
 }
 
 /** Crea progreso inicial para una fase si no existe */
@@ -40,13 +40,20 @@ export function getPhaseProgress(phaseId: number, totalPairs: number): PhaseProg
   const all = getAllProgress();
 
   if (all[phaseId]) {
-    // Si ya existe, asegurarse de que tenga la cantidad correcta de bloques
+    // Si ya existe, ajustar la cantidad de bloques (sube o baja si cambió wordsPerBlock)
     const existing = all[phaseId];
     const expectedBlocks = getBlockCount(totalPairs);
-    if (existing.blocks.length < expectedBlocks) {
+    if (existing.blocks.length !== expectedBlocks) {
+      // Añadir bloques nuevos si se redujo el tamaño por bloque
       for (let i = existing.blocks.length; i < expectedBlocks; i++) {
         existing.blocks.push({ blockIndex: i, completed: false, bestScore: 0 });
       }
+      // Recortar si se aumentó el tamaño por bloque (menos bloques)
+      if (existing.blocks.length > expectedBlocks) {
+        existing.blocks = existing.blocks.slice(0, expectedBlocks);
+      }
+      existing.phaseCompleted = existing.blocks.every(b => b.completed);
+      existing.totalScore = existing.blocks.reduce((s, b) => s + b.bestScore, 0);
       all[phaseId] = existing;
       saveAllProgress(all);
     }
