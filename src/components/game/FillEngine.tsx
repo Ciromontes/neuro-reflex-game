@@ -70,14 +70,37 @@ function speakEn(text: string) {
   window.speechSynthesis.speak(utt);
 }
 
-/** Genera los guiones bajos espaciados: "_ _ _ _ _" */
-function blanks(word: string): string {
-  return word.split('').map(() => '_').join(' ');
+/**
+ * Genera los guiones bajos espaciados.
+ * Para "pick up" → "_ _ _ _  _ _" (doble espacio entre palabras)
+ */
+function blanks(answer: string): string {
+  return answer.split(' ').map(w =>
+    w.split('').map(() => '_').join(' ')
+  ).join('   ');
 }
 
-/** Reemplaza _____ por la respuesta en la frase */
-function fillBlank(text: string, answer: string): string {
-  return text.replace('_____', answer);
+/**
+ * Reemplaza TODOS los _____ por las palabras de la respuesta.
+ * "Don't _____ _____ on your dreams" + "give up" → "Don't give up on your dreams"
+ */
+function fillBlanks(text: string, answer: string): string {
+  const words = answer.split(' ');
+  let result = text;
+  for (const w of words) {
+    result = result.replace('_____', w);
+  }
+  return result;
+}
+
+/**
+ * Normaliza el texto para split: une secuencias de _____ en un solo marcador.
+ * "Don't _____ _____ on" → ["Don't ", " on"]
+ */
+function splitSentence(text: string): string[] {
+  // Reemplaza una o más ocurrencias de _____ (separadas por espacios) por un marcador único
+  const normalized = text.replace(/_____(?:\s_____)*/g, '{{BLANK}}');
+  return normalized.split('{{BLANK}}');
 }
 
 /** Selecciona 1 frase al azar de un array de Sentence para una "cara" (target o antonym) */
@@ -123,7 +146,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
           answer: ans,
           text: txt,
           spanishText: spa || '',
-          completeSentence: fillBlank(txt, ans),
+          completeSentence: fillBlanks(txt, ans),
         });
       }
 
@@ -139,7 +162,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
           answer: ans,
           text: txt,
           spanishText: spa || '',
-          completeSentence: fillBlank(txt, ans),
+          completeSentence: fillBlanks(txt, ans),
         });
       }
     }
@@ -164,6 +187,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
   const [wrongCount, setWrongCount] = useState(0);
   const [hintLevel, setHintLevel] = useState(0); // 0 = sin pista, 1..3
   const [completed, setCompleted] = useState(false);
+  const [showSpanish, setShowSpanish] = useState(false); // toggle español
 
   const inputRef = useRef<HTMLInputElement>(null);
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -183,17 +207,32 @@ const FillEngine: React.FC<FillEngineProps> = ({
     return () => { if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current); };
   }, []);
 
-  // ── Pistas progresivas ────────────────────────────────────
+  // ── Pistas progresivas (muestran carácter desde nivel 1) ──
   const getHintText = useCallback((): string => {
     if (!current) return '';
-    const word = current.answer;
-    const len = word.length;
+    const answer = current.answer; // puede ser multi-palabra: "pick up"
+    const words = answer.split(' ');
     if (hintLevel === 0) return '';
-    if (hintLevel === 1) return `${len} letras`;
-    if (hintLevel === 2) return `${word[0].toUpperCase()}${'·'.repeat(len - 1)} (${len} letras)`;
-    // hintLevel >= 3: reveal first 2 + last letter
-    const revealed = word[0].toUpperCase() + word.slice(1, Math.min(2, len - 1)).toLowerCase() + '·'.repeat(Math.max(0, len - 3)) + word[len - 1].toLowerCase();
-    return `${revealed} (${len} letras)`;
+
+    // Generar pista por cada palabra del answer
+    const hintWords = words.map(w => {
+      const len = w.length;
+      if (hintLevel === 1) {
+        // 1ª letra + puntos
+        return w[0].toUpperCase() + '·'.repeat(len - 1);
+      }
+      if (hintLevel === 2) {
+        // 2 primeras letras + puntos
+        const show = Math.min(2, len);
+        return w.slice(0, show).toUpperCase() + '·'.repeat(Math.max(0, len - show));
+      }
+      // hintLevel >= 3: 2 primeras + última
+      if (len <= 3) return w.toUpperCase();
+      return w[0].toUpperCase() + w[1].toLowerCase() + '·'.repeat(len - 3) + w[len - 1].toLowerCase();
+    });
+
+    const charCount = answer.replace(/ /g, '').length; // sin contar espacios
+    return `${hintWords.join(' ')} (${charCount} letras)`;
   }, [current, hintLevel]);
 
   const requestHint = useCallback(() => {
@@ -245,6 +284,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
       setUserInput('');
       setFeedback(null);
       setHintLevel(0);
+      setShowSpanish(false);
     }
   }, [idx, queue.length, score, onBlockComplete]);
 
@@ -272,6 +312,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
     setCorrectCount(0);
     setWrongCount(0);
     setHintLevel(0);
+    setShowSpanish(false);
     setCompleted(false);
   };
 
@@ -335,9 +376,9 @@ const FillEngine: React.FC<FillEngineProps> = ({
   // ═══════════════════════════════════════════════════════════
   if (!current) return null;
 
-  const parts = current.text.split('_____');
+  const parts = splitSentence(current.text);
   const progressPct = totalItems > 0 ? (idx / totalItems) * 100 : 0;
-  const blankDisplay = blanks(current.answer); // "_ _ _ _ _"
+  const blankDisplay = blanks(current.answer); // "_ _ _ _   _ _" for multi-word
 
   return (
     <div className="fill-engine">
@@ -384,7 +425,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
 
         <p className="fill-card__sentence">
           {feedback ? (
-            // Paso 7: tras responder, mostrar frase completa
+            // Tras responder: frase COMPLETA en inglés
             <>
               {parts[0]}
               <span className={`fill-card__answer ${feedback === 'correct' ? 'fill-card__answer--correct' : 'fill-card__answer--wrong'}`}>
@@ -393,7 +434,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
               {parts[1] || ''}
             </>
           ) : (
-            // Sin resolver: mostrar guiones exactos
+            // Sin resolver: guiones exactos por carácter
             <>
               {parts[0]}
               <span className="fill-card__blank">
@@ -404,7 +445,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
           )}
         </p>
 
-        {/* Paso 7: feedback — traducción al español */}
+        {/* Feedback — respuesta correcta si falló + botón español + audio */}
         {feedback && (
           <div className="fill-card__feedback-extra">
             {feedback === 'wrong' && (
@@ -412,9 +453,21 @@ const FillEngine: React.FC<FillEngineProps> = ({
                 Respuesta correcta: <strong>{current.answer}</strong>
               </p>
             )}
-            <p className="fill-card__spanish">
-              🇪🇸 {current.spanishText}
-            </p>
+
+            {/* Español como toggle — cuesta 5 pts */}
+            {showSpanish ? (
+              <p className="fill-card__spanish">
+                🇪🇸 {current.spanishText}
+              </p>
+            ) : (
+              <button
+                className="fill-card__spanish-toggle"
+                onClick={() => { setShowSpanish(true); setScore(s => Math.max(0, s - 5)); }}
+              >
+                🇪🇸 Ver en español (−5 pts)
+              </button>
+            )}
+
             <button
               className="fill-card__audio-btn"
               onClick={() => speakEn(current.completeSentence)}
@@ -447,7 +500,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
               value={userInput}
               onChange={e => setUserInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Escribe la palabra (${current.answer.length} letras)...`}
+              placeholder={`Escribe la palabra (${current.answer.replace(/ /g, '').length} letras)...`}
               autoCapitalize="none"
               autoCorrect="off"
               autoComplete="off"
@@ -702,6 +755,24 @@ const fillStyles = `
   font-family: 'Space Mono', monospace;
 }
 .fill-card__audio-btn:hover { background: rgba(191,90,242,0.25); }
+
+/* Toggle español */
+.fill-card__spanish-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,215,0,0.10);
+  border: 1px solid rgba(255,215,0,0.25);
+  border-radius: 20px;
+  color: #ffd700;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Space Mono', monospace;
+  margin-bottom: 10px;
+}
+.fill-card__spanish-toggle:hover { background: rgba(255,215,0,0.18); }
 
 /* Pista */
 .fill-card__hint {
