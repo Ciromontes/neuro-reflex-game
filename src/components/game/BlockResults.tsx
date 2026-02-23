@@ -23,6 +23,33 @@ interface BlockResultsProps {
   onExit: () => void;
 }
 
+// Pronounce target then antonym in English
+const speakPair = (target: string, antonym: string) => {
+  if (!window.speechSynthesis) return;
+  if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+  window.speechSynthesis.cancel();
+  const voices = window.speechSynthesis.getVoices();
+  const eng = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+  const go = (v: SpeechSynthesisVoice | undefined) => {
+    const utt1 = new SpeechSynthesisUtterance(target);
+    utt1.lang = 'en-US'; utt1.rate = 0.9; if (v) utt1.voice = v;
+    utt1.onend = () => setTimeout(() => {
+      const utt2 = new SpeechSynthesisUtterance(antonym);
+      utt2.lang = 'en-US'; utt2.rate = 0.9; if (v) utt2.voice = v;
+      window.speechSynthesis.speak(utt2);
+    }, 350);
+    window.speechSynthesis.speak(utt1);
+  };
+  if (voices.length > 0) {
+    go(eng);
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      const v2 = window.speechSynthesis.getVoices();
+      go(v2.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-')));
+    };
+  }
+};
+
 export const BlockResults: React.FC<BlockResultsProps> = ({
   victory,
   blockIndex,
@@ -73,7 +100,13 @@ export const BlockResults: React.FC<BlockResultsProps> = ({
         {blockWords.map((word, idx) => {
           const isCorrect = studiedWords.has(word.target);
           return (
-            <div key={idx} className={`block-results-word ${isCorrect ? 'correct' : 'missed'}`}>
+            <div
+              key={idx}
+              className={`block-results-word ${isCorrect ? 'correct' : 'missed'}`}
+              onClick={() => speakPair(word.target, word.antonym)}
+              style={{ cursor: 'pointer' }}
+              title="Toca para escuchar"
+            >
               <div className="block-results-word-icon">
                 {isCorrect
                   ? <CheckCircle size={18} color="#00ff87" />
@@ -87,6 +120,11 @@ export const BlockResults: React.FC<BlockResultsProps> = ({
               {(word.targetIpa || word.antonymIpa) && (
                 <div className="block-results-word-ipa">
                   {word.targetIpa} — {word.antonymIpa}
+                </div>
+              )}
+              {word.spanish && (
+                <div className="block-results-word-spanish">
+                  🌐 {word.spanish}
                 </div>
               )}
             </div>

@@ -76,7 +76,25 @@ export const GameEngine: React.FC<GameEngineProps> = ({
     setWordsOverride
   } = useGameLogic(phase, mode, { blockWords, speedMs, onBlockComplete });
 
-  // Speak a word aloud (used when a falling word block is tapped)
+  // Speak a word pair aloud (learning screen card tap)
+  const speakLearningPair = (target: string, antonym: string) => {
+    if (!window.speechSynthesis) return;
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices();
+    const eng = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
+    const makeUtt = (text: string) => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = 0.9;
+      if (eng) u.voice = eng;
+      return u;
+    };
+    const u1 = makeUtt(target);
+    u1.onend = () => setTimeout(() => window.speechSynthesis.speak(makeUtt(antonym)), 350);
+    window.speechSynthesis.speak(u1);
+  };
+
+  // Speak a single word aloud (falling word tap during gameplay)
   const speakFallingWord = (text: string) => {
     if (!window.speechSynthesis || !soundEnabled) return;
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
@@ -204,7 +222,23 @@ export const GameEngine: React.FC<GameEngineProps> = ({
         
         <div className="learning-list">
           {displayWords.map((word, idx) => (
-            <div key={idx} className="learning-card">
+            <div
+              key={idx}
+              className="learning-card"
+              onPointerDown={(e) => {
+                e.currentTarget.style.transform = 'scale(0.97)';
+              }}
+              onPointerUp={(e) => {
+                e.currentTarget.style.transform = '';
+                speakLearningPair(word.target, word.antonym);
+              }}
+              onPointerLeave={(e) => {
+                e.currentTarget.style.transform = '';
+              }}
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              title="Toca para escuchar"
+            >
+              <div className="learning-audio-hint">🔊</div>
               <div className="learning-pair">
                 <span>{word.target}</span>
                 <span className="learning-pair-arrow">↔</span>

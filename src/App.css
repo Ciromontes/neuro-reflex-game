@@ -257,6 +257,7 @@ body {
   flex-direction: column;
   gap: 6px;
   transition: all 0.3s;
+  position: relative; /* needed for .learning-audio-hint absolute positioning */
 }
 
 .learning-card:hover {
@@ -1122,6 +1123,7 @@ body {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
+  transition: transform 0.1s, opacity 0.1s;
 }
 
 .block-results-word.correct {
@@ -1170,6 +1172,34 @@ body {
   color: rgba(255, 255, 255, 0.35);
   font-family: 'Segoe UI', 'Noto Sans', sans-serif;
   letter-spacing: 0.5px;
+}
+
+/* Spanish translation row in block-results */
+.block-results-word-spanish {
+  width: 100%;
+  padding-left: 28px;
+  font-size: 12px;
+  color: rgba(255, 200, 100, 0.75);
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+/* Tap feedback on block-results word rows */
+.block-results-word:active {
+  opacity: 0.75;
+  transform: scale(0.98);
+}
+
+/* ==============================
+   LEARNING SCREEN — audio hint
+   ============================== */
+.learning-audio-hint {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 14px;
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 /* Tip */
