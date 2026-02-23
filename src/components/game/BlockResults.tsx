@@ -1,6 +1,7 @@
 import React from 'react';
 import { RotateCcw, ArrowRight, X, CheckCircle, XCircle } from 'lucide-react';
 import type { WordPair } from '../../types';
+import { CoffeeButton } from '../common/CoffeeCard';
 
 interface BlockResultsProps {
   /** Whether the player won or lost */
@@ -155,6 +156,11 @@ export const BlockResults: React.FC<BlockResultsProps> = ({
           <X size={20} />
           BLOQUES
         </button>
+      </div>
+
+      {/* ☕ Donation button */}
+      <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center' }}>
+        <CoffeeButton label={victory ? '☕ ¡Apoya esta app!' : '☕ Invítame un café'} />
       </div>
     </div>
   );

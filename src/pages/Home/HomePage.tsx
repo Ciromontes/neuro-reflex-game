@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { phases } from '../../data/phases';
 import { Play } from 'lucide-react';
+import { CoffeeCard } from '../../components/common/CoffeeCard';
 
 const HomePage: React.FC = () => {
   return (
@@ -233,6 +234,13 @@ const HomePage: React.FC = () => {
       <div className="home-footer">
         <p>Total: {phases.length} fases • {phases.reduce((total, phase) => total + phase.wordPairs.length, 0)} palabras</p>
       </div>
+
+      {/* ☕ Donation card */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 48, position: 'relative', zIndex: 2 }}>
+        <CoffeeCard />
+      </div>
+
+      <div style={{ height: 40 }} />
     </div>
   );
 };
