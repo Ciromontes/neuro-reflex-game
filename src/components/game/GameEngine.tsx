@@ -644,7 +644,7 @@ export const GameEngine: React.FC<GameEngineProps> = ({
 
             {/* Mini speed control (block mode) */}
             {isBlockMode && speedLevel && onSpeedChange && (
-              <div className="stat-item">
+              <div className="stat-item stat-item--speed">
                 <div className="stat-label">Velocidad</div>
                 <div className="mini-speed">
                   {SPEED_LEVELS.map(sl => (

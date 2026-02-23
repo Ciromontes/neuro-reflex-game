@@ -184,6 +184,38 @@ export const useGameLogic = (
     }
   }, [soundEnabled]);
 
+  /**
+   * speakPair — iOS-safe: habla target y luego antónimo usando utterance.onend
+   * (sin llamar cancel() entre los dos, lo que rompía el audio en iOS)
+   */
+  const speakPair = useCallback((target: string, antonym: string, rate = 1.0) => {
+    if (!soundEnabled || !window.speechSynthesis) return;
+
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+
+    const voices = window.speechSynthesis.getVoices();
+    const engVoice = voices.find(v =>
+      v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-')
+    );
+
+    const makeU = (text: string) => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      u.rate = rate;
+      u.volume = 1;
+      if (engVoice) u.voice = engVoice;
+      return u;
+    };
+
+    const u1 = makeU(target);
+    u1.onend = () => {
+      // No cancel() aquí — iOS pierde el contexto de audio si se cancela entre palabras
+      window.speechSynthesis.speak(makeU(antonym));
+    };
+    window.speechSynthesis.speak(u1);
+  }, [soundEnabled]);
+
   // Crear partículas
   const createParticles = useCallback((x: number, y: number) => {
     const newParticles: Particle[] = [];
@@ -420,10 +452,8 @@ export const useGameLogic = (
         }
       }
       
-      speakWord(cw.target, 1.0);
-      setTimeout(() => {
-        speakWord(cw.antonym, 1.0);
-      }, 800);
+      // Cadena iOS-safe: target → onend → antónimo (sin cancel entre los dos)
+      speakPair(cw.target, cw.antonym);
       
       setFeedback({
         type: 'correct',
@@ -480,7 +510,7 @@ export const useGameLogic = (
         return newLives;
       });
     }
-  }, [createParticles, createConfetti, speakWord, difficultyConfig, blockWords, studiedWords, wordsOverride, activeWords]);
+  }, [createParticles, createConfetti, speakWord, speakPair, difficultyConfig, blockWords, studiedWords, wordsOverride, activeWords]);
 
   // Iniciar juego (para cada modo)
   // seedWords: palabras falladas de rondas anteriores que se repiten con prioridad (memoria espaciada)
