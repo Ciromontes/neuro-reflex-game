@@ -7,9 +7,10 @@ import BlockSelector from '../../components/phase-selection/BlockSelector';
 import SpeedControl from '../../components/phase-selection/SpeedControl';
 import type { SpeedLevel } from '../../types';
 import { getWordsPerBlock, saveWordsPerBlock, MIN_BLOCK_SIZE, MAX_BLOCK_SIZE } from '../../types';
-import { ArrowLeft, BookOpen, Target, Gamepad2, Play, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, BookOpen, Target, Gamepad2, Play, ChevronUp, ChevronDown, PenTool } from 'lucide-react';
+import { hasSentences } from '../../data/sentences';
 
-type TabMode = 'review' | 'training' | 'play';
+type TabMode = 'review' | 'training' | 'play' | 'completar';
 
 const PhaseSetupPage: React.FC = () => {
   const { phaseId } = useParams<{ phaseId: string }>();
@@ -95,7 +96,7 @@ const PhaseSetupPage: React.FC = () => {
       speakWordPair(bWords[0].target, bWords[0].antonym);
     }
     if (selectedBlock === index) {
-      const modeParam = activeTab === 'training' ? 'training' : 'play';
+      const modeParam = activeTab === 'training' ? 'training' : activeTab === 'completar' ? 'completar' : 'play';
       navigate(`/play/${phase.id}/block/${index}?speed=${speed}&mode=${modeParam}`);
     } else {
       setSelectedBlock(index);
@@ -104,17 +105,20 @@ const PhaseSetupPage: React.FC = () => {
 
   const handlePlay = () => {
     if (selectedBlock === null) return;
-    const modeParam = activeTab === 'training' ? 'training' : 'play';
+    const modeParam = activeTab === 'training' ? 'training' : activeTab === 'completar' ? 'completar' : 'play';
     navigate(`/play/${phase.id}/block/${selectedBlock}?speed=${speed}&mode=${modeParam}`);
   };
+
+  const phaseHasSentences = hasSentences(phase.id);
 
   const completedCount = progress.blocks.filter((b) => b.completed).length;
   const totalBlocks = getBlockCount(phase);
 
-  const tabs: { key: TabMode; icon: React.ReactNode; label: string; desc: string }[] = [
+  const tabs: { key: TabMode; icon: React.ReactNode; label: string; desc: string; disabled?: boolean }[] = [
     { key: 'review', icon: <BookOpen size={20} />, label: 'REPASAR', desc: 'Revisa las palabras' },
     { key: 'training', icon: <Target size={20} />, label: 'ENTRENAMIENTO', desc: 'Con pistas en verde' },
     { key: 'play', icon: <Gamepad2 size={20} />, label: 'JUGAR', desc: 'Sin pistas' },
+    { key: 'completar', icon: <PenTool size={20} />, label: 'COMPLETAR', desc: 'Rellena el hueco', disabled: !phaseHasSentences },
   ];
 
   return (
@@ -155,11 +159,13 @@ const PhaseSetupPage: React.FC = () => {
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            className={`setup-tabs__btn ${activeTab === tab.key ? 'setup-tabs__btn--active' : ''} setup-tabs__btn--${tab.key}`}
+            className={`setup-tabs__btn ${activeTab === tab.key ? 'setup-tabs__btn--active' : ''} setup-tabs__btn--${tab.key} ${tab.disabled ? 'setup-tabs__btn--disabled' : ''}`}
             onClick={() => {
+              if (tab.disabled) return;
               setActiveTab(tab.key);
               setSelectedBlock(null);
             }}
+            disabled={tab.disabled}
           >
             <span className="setup-tabs__icon">{tab.icon}</span>
             <span className="setup-tabs__label">{tab.label}</span>
@@ -200,6 +206,71 @@ const PhaseSetupPage: React.FC = () => {
               ))}
             </div>
           </div>
+        )}
+
+        {/* --- COMPLETAR (fill-in-the-blank) --- */}
+        {activeTab === 'completar' && (
+          <>
+            <p className="setup-mode-hint setup-mode-hint--completar">
+              ✏️ Completa la frase con la palabra correcta — usa el teclado
+            </p>
+
+            {/* Chunk size control */}
+            <div className="chunk-ctrl">
+              <span className="chunk-ctrl__label">🧠 Palabras por bloque</span>
+              <div className="chunk-ctrl__stepper">
+                <button
+                  className="chunk-ctrl__btn"
+                  onClick={() => handleChangeWpb(-1)}
+                  disabled={wpb <= MIN_BLOCK_SIZE}
+                  aria-label="Reducir palabras"
+                >
+                  <ChevronDown size={20} />
+                </button>
+                <span className="chunk-ctrl__value">{wpb}</span>
+                <button
+                  className="chunk-ctrl__btn"
+                  onClick={() => handleChangeWpb(1)}
+                  disabled={wpb >= MAX_BLOCK_SIZE}
+                  aria-label="Aumentar palabras"
+                >
+                  <ChevronUp size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Block Selector */}
+            <BlockSelector
+              phase={phase}
+              blocks={progress.blocks}
+              selectedBlock={selectedBlock}
+              onSelectBlock={handleSelectBlock}
+            />
+
+            {/* Action button */}
+            <div className="setup-page__actions">
+              {selectedBlock === null && (
+                <p className="setup-page__guide-hint">
+                  👆 Selecciona un bloque para completar frases
+                </p>
+              )}
+              {selectedBlock !== null && (
+                <p className="setup-page__guide-hint setup-page__guide-hint--selected">
+                  💡 Toca el bloque {selectedBlock + 1} otra vez para entrar directo
+                </p>
+              )}
+              <button
+                className="setup-page__btn-play setup-page__btn-play--completar"
+                disabled={selectedBlock === null}
+                onClick={handlePlay}
+              >
+                <Play size={22} />
+                {selectedBlock !== null
+                  ? `COMPLETAR BLOQUE ${selectedBlock + 1}`
+                  : `SELECCIONA UN BLOQUE`}
+              </button>
+            </div>
+          </>
         )}
 
         {/* --- ENTRENAMIENTO / JUGAR --- */}
@@ -442,6 +513,17 @@ const setupStyles = `
   color: #fff;
   box-shadow: 0 0 20px rgba(255,107,53,0.2);
 }
+.setup-tabs__btn--active.setup-tabs__btn--completar {
+  border-color: #bf5af2;
+  background: rgba(191,90,242,0.12);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(191,90,242,0.2);
+}
+.setup-tabs__btn--disabled {
+  opacity: 0.3;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
 
 .setup-tabs__icon {
   display: flex;
@@ -487,6 +569,11 @@ const setupStyles = `
 .setup-mode-hint--play {
   background: rgba(255,107,53,0.08);
   border: 1px solid rgba(255,107,53,0.2);
+  color: rgba(255,255,255,0.8);
+}
+.setup-mode-hint--completar {
+  background: rgba(191,90,242,0.08);
+  border: 1px solid rgba(191,90,242,0.2);
   color: rgba(255,255,255,0.8);
 }
 
@@ -799,6 +886,9 @@ const setupStyles = `
 .setup-page__btn-play--play {
   background: linear-gradient(135deg, #ff6b35, #ff9a56);
 }
+.setup-page__btn-play--completar {
+  background: linear-gradient(135deg, #bf5af2, #da8fff);
+}
 .setup-page__btn-play:not(:disabled):hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 30px rgba(0,255,135,0.4);
@@ -830,9 +920,11 @@ const setupStyles = `
   }
   .setup-tabs {
     gap: 8px;
+    flex-wrap: wrap;
   }
   .setup-tabs__btn {
     padding: 12px 6px;
+    min-width: calc(50% - 6px);
   }
   .setup-tabs__label {
     font-size: 10px;

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { GameEngine } from '../../components/game';
+import FillEngine from '../../components/game/FillEngine';
 import { getPhaseById } from '../../data/phases';
 import { getBlockWords, getBlockCount } from '../../utils/blockHelpers';
 import { completeBlock } from '../../utils/progressService';
@@ -28,8 +29,9 @@ const GamePage: React.FC = () => {
   const [currentSpeedLevel, setCurrentSpeedLevel] = useState<SpeedLevel>(initialSpeedLevel);
   const speedMs = SPEED_LEVELS.find(s => s.level === currentSpeedLevel)?.ms ?? 5000;
 
-  // Modo de juego desde query string: 'training' (con pistas) o 'play' (sin pistas)
+  // Modo de juego desde query string: 'training' | 'play' | 'completar'
   const modeParam = searchParams.get('mode');
+  const isCompletarMode = modeParam === 'completar';
   const blockGameMode: 'training' | 'play' = modeParam === 'play' ? 'play' : 'training';
 
   // Palabras del bloque (o todas si es modo legado)
@@ -113,19 +115,31 @@ const GamePage: React.FC = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <GameEngine
-        phase={phase}
-        mode={isBlockMode ? blockGameMode : gameMode}
-        onExit={handleExit}
-        onHome={handleHome}
-        blockWords={isBlockMode ? blockWords : undefined}
-        speedMs={isBlockMode ? speedMs : undefined}
-        blockIndex={blockIndex ?? undefined}
-        onBlockComplete={isBlockMode ? handleBlockComplete : undefined}
-        onNextBlock={hasNextBlock ? handleNextBlock : undefined}
-        speedLevel={isBlockMode ? currentSpeedLevel : undefined}
-        onSpeedChange={isBlockMode ? setCurrentSpeedLevel : undefined}
-      />
+      {isBlockMode && isCompletarMode ? (
+        <FillEngine
+          phase={phase}
+          blockWords={blockWords}
+          blockIndex={blockIndex ?? 0}
+          onBlockComplete={isBlockMode ? handleBlockComplete : undefined}
+          onNextBlock={hasNextBlock ? handleNextBlock : undefined}
+          onExit={handleExit}
+          onHome={handleHome}
+        />
+      ) : (
+        <GameEngine
+          phase={phase}
+          mode={isBlockMode ? blockGameMode : gameMode}
+          onExit={handleExit}
+          onHome={handleHome}
+          blockWords={isBlockMode ? blockWords : undefined}
+          speedMs={isBlockMode ? speedMs : undefined}
+          blockIndex={blockIndex ?? undefined}
+          onBlockComplete={isBlockMode ? handleBlockComplete : undefined}
+          onNextBlock={hasNextBlock ? handleNextBlock : undefined}
+          speedLevel={isBlockMode ? currentSpeedLevel : undefined}
+          onSpeedChange={isBlockMode ? setCurrentSpeedLevel : undefined}
+        />
+      )}
     </div>
   );
 };
