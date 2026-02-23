@@ -30,12 +30,14 @@ export interface WordSentences {
 
 // Importar frases de cada fase
 import { phase1Sentences } from './phase1-sentences';
+import { phase2Sentences } from './phase2-sentences';
+import { phase3Sentences } from './phase3-sentences';
 
 /** Mapa: phaseId → WordSentences[] */
 const sentencesByPhase: Record<number, WordSentences[]> = {
   1: phase1Sentences,
-  // 2: phase2Sentences   ← cuando estén listas
-  // 3: phase3Sentences   ← cuando estén listas
+  2: phase2Sentences,
+  3: phase3Sentences,
 };
 
 /**

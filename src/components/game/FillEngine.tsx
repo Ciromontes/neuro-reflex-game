@@ -147,8 +147,13 @@ const FillEngine: React.FC<FillEngineProps> = ({
     return shuffle(items);
   }, [blockWords, phase.id, isEasy]);
 
-  const totalItems = roundItems.length;
-  const maxScore = totalItems * MAX_PTS_PER_ITEM;
+  // ── Cola dinámica (permite reinsertar ítems fallados) ────
+  const [queue, setQueue] = useState<RoundItem[]>(roundItems);
+  const totalOriginal = roundItems.length; // para % precisión
+  const maxScore = totalOriginal * MAX_PTS_PER_ITEM;
+
+  // Sincronizar si roundItems cambia (retry)
+  useEffect(() => { setQueue(roundItems); }, [roundItems]);
 
   // ── Estado ────────────────────────────────────────────────
   const [idx, setIdx] = useState(0);
@@ -163,7 +168,8 @@ const FillEngine: React.FC<FillEngineProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const current = roundItems[idx] ?? null;
+  const current = queue[idx] ?? null;
+  const totalItems = queue.length;
 
   // Auto-focus
   useEffect(() => {
@@ -216,13 +222,21 @@ const FillEngine: React.FC<FillEngineProps> = ({
       setFeedback('wrong');
       setWrongCount(w => w + 1);
       speakEn(current.answer);
+
+      // ── Repetición espaciada: reinsertar 2 posiciones adelante ──
+      setQueue(prev => {
+        const copy = [...prev];
+        const insertAt = Math.min(idx + 3, copy.length); // 2 ítems después del siguiente
+        copy.splice(insertAt, 0, current);
+        return copy;
+      });
     }
-  }, [current, feedback, userInput, pointsForCurrent]);
+  }, [current, feedback, userInput, pointsForCurrent, idx]);
 
   // ── Avanzar ───────────────────────────────────────────────
   const handleNext = useCallback(() => {
     if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current);
-    if (idx + 1 >= totalItems) {
+    if (idx + 1 >= queue.length) {
       const finalScore = score;
       setCompleted(true);
       onBlockComplete?.(finalScore);
@@ -232,11 +246,11 @@ const FillEngine: React.FC<FillEngineProps> = ({
       setFeedback(null);
       setHintLevel(0);
     }
-  }, [idx, totalItems, score, onBlockComplete]);
+  }, [idx, queue.length, score, onBlockComplete]);
 
-  // Auto-avanzar tras feedback
+  // Auto-avanzar SOLO en aciertos; en errores, el usuario decide
   useEffect(() => {
-    if (feedback) {
+    if (feedback === 'correct') {
       autoAdvanceRef.current = setTimeout(handleNext, AUTO_ADVANCE_MS);
       return () => { if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current); };
     }
@@ -250,6 +264,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
   };
 
   const handleRetry = () => {
+    setQueue(roundItems); // reiniciar cola desde la mezcla original
     setIdx(0);
     setUserInput('');
     setFeedback(null);
@@ -264,7 +279,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
   // RENDER: Pantalla de resultados
   // ═══════════════════════════════════════════════════════════
   if (completed) {
-    const pct = totalItems > 0 ? Math.round((correctCount / totalItems) * 100) : 0;
+    const pct = totalOriginal > 0 ? Math.round((correctCount / totalOriginal) * 100) : 0;
     const stars = pct === 100 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0;
     const mastered = pct === 100;
     return (
@@ -296,7 +311,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
               <span className="fill-results__stat-label">Precisión</span>
             </div>
           </div>
-          <p className="fill-results__max">Máximo posible: {maxScore} pts</p>
+          <p className="fill-results__max">Máximo posible: {maxScore} pts · {totalOriginal} frases originales</p>
           <div className="fill-results__actions">
             <button className="fill-results__btn fill-results__btn--retry" onClick={handleRetry}>
               <RotateCcw size={18} /> REINTENTAR
