@@ -7,10 +7,14 @@ export interface Sentence {
   text: string;
   /** Respuesta correcta easy (en minúsculas) */
   answer: string;
+  /** Traducción al español de la frase easy */
+  spanishText: string;
   /** Frase hard con _____ */
   textHard: string;
   /** Respuesta correcta hard (conjugada / forma compleja) */
   answerHard: string;
+  /** Traducción al español de la frase hard */
+  spanishTextHard: string;
   /** Tipo de frase */
   type: 'affirmation' | 'question' | 'negation';
   /** Tiempo verbal */

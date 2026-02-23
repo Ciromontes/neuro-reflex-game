@@ -1,42 +1,54 @@
 // ============================================================
-// FillEngine — Motor de "Completa la frase" (fill-in-the-blank)
+// FillEngine v2 — Motor de "Completa la frase" (fill-in-the-blank)
+// ============================================================
+// Mejoras v2:
+//  1. No revela el par target ↔ antonym
+//  2. Guiones bajos = nº exacto de caracteres
+//  3. Orden aleatorio real (1 frase por palabra, mezcladas)
+//  4. Flujo: 10 frases por ronda (1 por cada target+antonym del bloque)
+//  5. Pistas restan puntos (100/75/50/25)
+//  6. Traducción al español tras responder
+//  7. Feedback mejorado: frase completa + español + audio
 // ============================================================
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, Home, Volume2, CheckCircle, XCircle, ArrowRight, Trophy, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Home, Volume2, CheckCircle, XCircle, ArrowRight, Trophy, RotateCcw, Eye } from 'lucide-react';
 import type { Phase, WordPair } from '../../types';
 import { getSentences } from '../../data/sentences';
 import type { Sentence } from '../../data/sentences';
 
 // ── Tipos internos ──────────────────────────────────────────
-interface SentenceItem {
+interface RoundItem {
   sentence: Sentence;
   wordPair: WordPair;
-  /** true → usar text/answer; false → usar textHard/answerHard */
-  isEasy: boolean;
+  /** La respuesta que se espera (easy o hard) */
+  answer: string;
+  /** El texto de la frase (easy o hard) */
+  text: string;
+  /** Traducción al español */
+  spanishText: string;
+  /** Frase completa (sin hueco) para mostrar tras feedback */
+  completeSentence: string;
 }
 
 type FeedbackState = null | 'correct' | 'wrong';
 
 export interface FillEngineProps {
   phase: Phase;
-  /** Palabras del bloque seleccionado */
   blockWords: WordPair[];
-  /** Índice del bloque (0-based) */
   blockIndex: number;
-  /** Callback al completar todas las frases */
   onBlockComplete?: (score: number) => void;
-  /** Ir al siguiente bloque */
   onNextBlock?: () => void;
-  /** Salir de vuelta al setup */
   onExit: () => void;
-  /** Ir al inicio */
   onHome?: () => void;
-  /** Dificultad: 'easy' (default, usa text/answer) o 'hard' (usa textHard/answerHard) */
   difficulty?: 'easy' | 'hard';
 }
 
+// ── Constantes ──────────────────────────────────────────────
+const MAX_PTS_PER_ITEM = 100;
+const HINT_COSTS = [25, 50, 75]; // puntos que pierdes por pista 1, 2, 3
+const AUTO_ADVANCE_MS = 2500;
+
 // ── Utilidades ──────────────────────────────────────────────
-/** Baraja un array (Fisher-Yates) */
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -46,7 +58,6 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** Habla una palabra en inglés */
 function speakEn(text: string) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
@@ -57,6 +68,26 @@ function speakEn(text: string) {
   const eng = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB' || v.lang.startsWith('en-'));
   if (eng) utt.voice = eng;
   window.speechSynthesis.speak(utt);
+}
+
+/** Genera los guiones bajos espaciados: "_ _ _ _ _" */
+function blanks(word: string): string {
+  return word.split('').map(() => '_').join(' ');
+}
+
+/** Reemplaza _____ por la respuesta en la frase */
+function fillBlank(text: string, answer: string): string {
+  return text.replace('_____', answer);
+}
+
+/** Selecciona 1 frase al azar de un array de Sentence para una "cara" (target o antonym) */
+function pickOne(sentences: Sentence[], forAnswer: string, isEasy: boolean): Sentence | null {
+  const matching = sentences.filter(s => {
+    const ans = isEasy ? s.answer : s.answerHard;
+    return ans.toLowerCase() === forAnswer.toLowerCase();
+  });
+  if (matching.length === 0) return null;
+  return matching[Math.floor(Math.random() * matching.length)];
 }
 
 // ── Componente principal ────────────────────────────────────
@@ -72,104 +103,170 @@ const FillEngine: React.FC<FillEngineProps> = ({
 }) => {
   const isEasy = difficulty === 'easy';
 
-  // Construir las frases del bloque
-  const sentenceItems: SentenceItem[] = useMemo(() => {
-    const items: SentenceItem[] = [];
+  // Paso 3+4: Construir la ronda: 1 frase por target + 1 por antonym de cada wordPair
+  const roundItems: RoundItem[] = useMemo(() => {
+    const items: RoundItem[] = [];
+
     for (const wp of blockWords) {
-      const sentences = getSentences(phase.id, wp.target);
-      for (const s of sentences) {
-        items.push({ sentence: s, wordPair: wp, isEasy });
+      const allSentences = getSentences(phase.id, wp.target);
+      if (allSentences.length === 0) continue;
+
+      // 1 frase para el target
+      const tSentence = pickOne(allSentences, wp.target.toLowerCase(), isEasy);
+      if (tSentence) {
+        const ans = isEasy ? tSentence.answer : tSentence.answerHard;
+        const txt = isEasy ? tSentence.text : tSentence.textHard;
+        const spa = isEasy ? tSentence.spanishText : tSentence.spanishTextHard;
+        items.push({
+          sentence: tSentence,
+          wordPair: wp,
+          answer: ans,
+          text: txt,
+          spanishText: spa || '',
+          completeSentence: fillBlank(txt, ans),
+        });
+      }
+
+      // 1 frase para el antonym
+      const aSentence = pickOne(allSentences, wp.antonym.toLowerCase(), isEasy);
+      if (aSentence) {
+        const ans = isEasy ? aSentence.answer : aSentence.answerHard;
+        const txt = isEasy ? aSentence.text : aSentence.textHard;
+        const spa = isEasy ? aSentence.spanishText : aSentence.spanishTextHard;
+        items.push({
+          sentence: aSentence,
+          wordPair: wp,
+          answer: ans,
+          text: txt,
+          spanishText: spa || '',
+          completeSentence: fillBlank(txt, ans),
+        });
       }
     }
+
     return shuffle(items);
   }, [blockWords, phase.id, isEasy]);
 
-  const totalSentences = sentenceItems.length;
+  const totalItems = roundItems.length;
+  const maxScore = totalItems * MAX_PTS_PER_ITEM;
 
-  // Estado del juego
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // ── Estado ────────────────────────────────────────────────
+  const [idx, setIdx] = useState(0);
   const [userInput, setUserInput] = useState('');
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [score, setScore] = useState(0);
-  const [mistakes, setMistakes] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [wrongCount, setWrongCount] = useState(0);
+  const [hintLevel, setHintLevel] = useState(0); // 0 = sin pista, 1..3
   const [completed, setCompleted] = useState(false);
-  const [showHint, setShowHint] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Frase actual
-  const current = sentenceItems[currentIndex] ?? null;
-  const currentText = current
-    ? (current.isEasy ? current.sentence.text : current.sentence.textHard)
-    : '';
-  const correctAnswer = current
-    ? (current.isEasy ? current.sentence.answer : current.sentence.answerHard)
-    : '';
+  const current = roundItems[idx] ?? null;
 
-  // Auto-focus en el input
+  // Auto-focus
   useEffect(() => {
-    if (!completed && inputRef.current) {
-      // pequeño delay para que el teclado iOS se abra bien
+    if (!completed && !feedback && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 200);
     }
-  }, [currentIndex, completed, feedback]);
+  }, [idx, completed, feedback]);
 
-  // Validar respuesta
+  // Limpiar timer
+  useEffect(() => {
+    return () => { if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current); };
+  }, []);
+
+  // ── Pistas progresivas ────────────────────────────────────
+  const getHintText = useCallback((): string => {
+    if (!current) return '';
+    const word = current.answer;
+    const len = word.length;
+    if (hintLevel === 0) return '';
+    if (hintLevel === 1) return `${len} letras`;
+    if (hintLevel === 2) return `${word[0].toUpperCase()}${'·'.repeat(len - 1)} (${len} letras)`;
+    // hintLevel >= 3: reveal first 2 + last letter
+    const revealed = word[0].toUpperCase() + word.slice(1, Math.min(2, len - 1)).toLowerCase() + '·'.repeat(Math.max(0, len - 3)) + word[len - 1].toLowerCase();
+    return `${revealed} (${len} letras)`;
+  }, [current, hintLevel]);
+
+  const requestHint = useCallback(() => {
+    if (hintLevel < 3) setHintLevel(h => h + 1);
+  }, [hintLevel]);
+
+  // Puntos para la frase actual
+  const pointsForCurrent = useCallback((): number => {
+    let pts = MAX_PTS_PER_ITEM;
+    for (let i = 0; i < hintLevel; i++) pts -= HINT_COSTS[i];
+    return Math.max(0, pts);
+  }, [hintLevel]);
+
+  // ── Validar ───────────────────────────────────────────────
   const checkAnswer = useCallback(() => {
     if (!current || feedback) return;
     const trimmed = userInput.trim().toLowerCase();
-    const correct = correctAnswer.toLowerCase();
+    const correct = current.answer.toLowerCase();
 
     if (trimmed === correct) {
       setFeedback('correct');
-      setScore(s => s + 1);
-      speakEn(correctAnswer);
+      setScore(s => s + pointsForCurrent());
+      setCorrectCount(c => c + 1);
+      speakEn(current.completeSentence);
     } else {
       setFeedback('wrong');
-      setMistakes(m => m + 1);
+      setWrongCount(w => w + 1);
+      speakEn(current.answer);
     }
-  }, [current, feedback, userInput, correctAnswer]);
+  }, [current, feedback, userInput, pointsForCurrent]);
 
-  // Avanzar a la siguiente frase
+  // ── Avanzar ───────────────────────────────────────────────
   const handleNext = useCallback(() => {
-    if (currentIndex + 1 >= totalSentences) {
-      // Terminó el bloque
+    if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current);
+    if (idx + 1 >= totalItems) {
+      const finalScore = score;
       setCompleted(true);
-      onBlockComplete?.(score);
+      onBlockComplete?.(finalScore);
     } else {
-      setCurrentIndex(i => i + 1);
+      setIdx(i => i + 1);
       setUserInput('');
       setFeedback(null);
-      setShowHint(false);
+      setHintLevel(0);
     }
-  }, [currentIndex, totalSentences, score, onBlockComplete]);
+  }, [idx, totalItems, score, onBlockComplete]);
 
-  // Manejar Enter
+  // Auto-avanzar tras feedback
+  useEffect(() => {
+    if (feedback) {
+      autoAdvanceRef.current = setTimeout(handleNext, AUTO_ADVANCE_MS);
+      return () => { if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current); };
+    }
+  }, [feedback, handleNext]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      if (feedback) {
-        handleNext();
-      } else {
-        checkAnswer();
-      }
+      if (feedback) handleNext();
+      else checkAnswer();
     }
   };
 
-  // Reiniciar el bloque
   const handleRetry = () => {
-    setCurrentIndex(0);
+    setIdx(0);
     setUserInput('');
     setFeedback(null);
     setScore(0);
-    setMistakes(0);
+    setCorrectCount(0);
+    setWrongCount(0);
+    setHintLevel(0);
     setCompleted(false);
-    setShowHint(false);
   };
 
-  // ── Render: pantalla de resultados ──
+  // ═══════════════════════════════════════════════════════════
+  // RENDER: Pantalla de resultados
+  // ═══════════════════════════════════════════════════════════
   if (completed) {
-    const pct = totalSentences > 0 ? Math.round((score / totalSentences) * 100) : 0;
-    const stars = pct >= 90 ? 3 : pct >= 70 ? 2 : pct >= 50 ? 1 : 0;
+    const pct = totalItems > 0 ? Math.round((correctCount / totalItems) * 100) : 0;
+    const stars = pct === 100 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0;
+    const mastered = pct === 100;
     return (
       <div className="fill-engine">
         <style>{fillStyles}</style>
@@ -178,7 +275,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
             <Trophy size={64} />
           </div>
           <h2 className="fill-results__title">
-            {pct >= 90 ? '¡EXCELENTE!' : pct >= 70 ? '¡MUY BIEN!' : pct >= 50 ? '¡BUEN INTENTO!' : '¡SIGUE PRACTICANDO!'}
+            {mastered ? '¡DOMINAS ESTE BLOQUE!' : pct >= 80 ? '¡MUY BIEN!' : pct >= 60 ? '¡BUEN INTENTO!' : '¡SIGUE MEJORANDO!'}
           </h2>
           <div className="fill-results__stars">
             {[1, 2, 3].map(i => (
@@ -188,17 +285,18 @@ const FillEngine: React.FC<FillEngineProps> = ({
           <div className="fill-results__stats">
             <div className="fill-results__stat">
               <span className="fill-results__stat-val">{score}</span>
-              <span className="fill-results__stat-label">Correctas</span>
+              <span className="fill-results__stat-label">Puntos</span>
             </div>
             <div className="fill-results__stat">
-              <span className="fill-results__stat-val">{mistakes}</span>
-              <span className="fill-results__stat-label">Errores</span>
+              <span className="fill-results__stat-val">{correctCount}/{totalItems}</span>
+              <span className="fill-results__stat-label">Correctas</span>
             </div>
             <div className="fill-results__stat">
               <span className="fill-results__stat-val">{pct}%</span>
               <span className="fill-results__stat-label">Precisión</span>
             </div>
           </div>
+          <p className="fill-results__max">Máximo posible: {maxScore} pts</p>
           <div className="fill-results__actions">
             <button className="fill-results__btn fill-results__btn--retry" onClick={handleRetry}>
               <RotateCcw size={18} /> REINTENTAR
@@ -217,18 +315,20 @@ const FillEngine: React.FC<FillEngineProps> = ({
     );
   }
 
-  // ── Render: pantalla de juego ──
+  // ═══════════════════════════════════════════════════════════
+  // RENDER: Pantalla de juego
+  // ═══════════════════════════════════════════════════════════
   if (!current) return null;
 
-  // Dividir la frase en partes por _____
-  const parts = currentText.split('_____');
-  const progressPct = totalSentences > 0 ? ((currentIndex) / totalSentences) * 100 : 0;
+  const parts = current.text.split('_____');
+  const progressPct = totalItems > 0 ? (idx / totalItems) * 100 : 0;
+  const blankDisplay = blanks(current.answer); // "_ _ _ _ _"
 
   return (
     <div className="fill-engine">
       <style>{fillStyles}</style>
 
-      {/* Header */}
+      {/* Header — sin revelar el par */}
       <div className="fill-header">
         <button className="fill-header__btn" onClick={onExit} title="Volver">
           <ArrowLeft size={20} />
@@ -237,9 +337,12 @@ const FillEngine: React.FC<FillEngineProps> = ({
           <span className="fill-header__phase">{phase.icon} Fase {phase.id}</span>
           <span className="fill-header__block">Bloque {blockIndex + 1}</span>
         </div>
-        <div className="fill-header__score">
-          <CheckCircle size={16} /> {score}
-          <XCircle size={16} style={{ marginLeft: 12 }} /> {mistakes}
+        <div className="fill-header__score-area">
+          <span className="fill-header__pts">{score} pts</span>
+          <span className="fill-header__tally">
+            <CheckCircle size={14} className="fill-header__icon--ok" /> {correctCount}
+            <XCircle size={14} className="fill-header__icon--err" /> {wrongCount}
+          </span>
         </div>
         {onHome && (
           <button className="fill-header__btn" onClick={onHome} title="Inicio">
@@ -251,51 +354,69 @@ const FillEngine: React.FC<FillEngineProps> = ({
       {/* Progress bar */}
       <div className="fill-progress">
         <div className="fill-progress__bar" style={{ width: `${progressPct}%` }} />
-        <span className="fill-progress__text">{currentIndex + 1} / {totalSentences}</span>
+        <span className="fill-progress__text">{idx + 1} / {totalItems}</span>
       </div>
 
-      {/* Word context */}
-      <div className="fill-context">
-        <span className="fill-context__pair">
-          {current.wordPair.target} ↔ {current.wordPair.antonym}
-        </span>
-        <span className="fill-context__spanish">{current.wordPair.spanish}</span>
-        <button
-          className="fill-context__audio"
-          onClick={() => speakEn(current.wordPair.target + ' ... ' + current.wordPair.antonym)}
-          title="Escuchar"
-        >
-          <Volume2 size={18} />
-        </button>
-      </div>
-
-      {/* Sentence card */}
+      {/* Sentence card — Paso 2: guiones = nº caracteres */}
       <div className={`fill-card ${feedback === 'correct' ? 'fill-card--correct' : feedback === 'wrong' ? 'fill-card--wrong' : ''}`}>
-        <div className="fill-card__type-badge">
-          {current.sentence.type === 'affirmation' ? '✓ Afirmación' :
-           current.sentence.type === 'question' ? '? Pregunta' : '✗ Negación'}
-          <span className="fill-card__time-badge">{current.sentence.time}</span>
-        </div>
-
-        <p className="fill-card__sentence">
-          {parts[0]}
-          <span className={`fill-card__blank ${feedback === 'correct' ? 'fill-card__blank--correct' : feedback === 'wrong' ? 'fill-card__blank--wrong' : ''}`}>
-            {feedback ? correctAnswer : userInput || '_____'}
-          </span>
-          {parts[1] || ''}
-        </p>
-
-        {/* Show hint: first letter + length */}
-        {showHint && !feedback && (
-          <p className="fill-card__hint">
-            💡 {correctAnswer[0].toUpperCase()}{'_'.repeat(correctAnswer.length - 1)} ({correctAnswer.length} letras)
-          </p>
+        {!feedback && (
+          <div className="fill-card__type-badge">
+            {current.sentence.type === 'affirmation' ? '✓ Afirmación' :
+             current.sentence.type === 'question' ? '? Pregunta' : '✗ Negación'}
+            <span className="fill-card__time-badge">{current.sentence.time}</span>
+          </div>
         )}
 
-        {/* Wrong feedback: show correct answer */}
-        {feedback === 'wrong' && (
-          <p className="fill-card__correct-answer">
-            ✅ Respuesta correcta: <strong>{correctAnswer}</strong>
+        <p className="fill-card__sentence">
+          {feedback ? (
+            // Paso 7: tras responder, mostrar frase completa
+            <>
+              {parts[0]}
+              <span className={`fill-card__answer ${feedback === 'correct' ? 'fill-card__answer--correct' : 'fill-card__answer--wrong'}`}>
+                {current.answer}
+              </span>
+              {parts[1] || ''}
+            </>
+          ) : (
+            // Sin resolver: mostrar guiones exactos
+            <>
+              {parts[0]}
+              <span className="fill-card__blank">
+                {userInput || blankDisplay}
+              </span>
+              {parts[1] || ''}
+            </>
+          )}
+        </p>
+
+        {/* Paso 7: feedback — traducción al español */}
+        {feedback && (
+          <div className="fill-card__feedback-extra">
+            {feedback === 'wrong' && (
+              <p className="fill-card__correct-answer">
+                Respuesta correcta: <strong>{current.answer}</strong>
+              </p>
+            )}
+            <p className="fill-card__spanish">
+              🇪🇸 {current.spanishText}
+            </p>
+            <button
+              className="fill-card__audio-btn"
+              onClick={() => speakEn(current.completeSentence)}
+              title="Escuchar"
+            >
+              <Volume2 size={18} /> Escuchar
+            </button>
+          </div>
+        )}
+
+        {/* Paso 5: pista progresiva */}
+        {!feedback && hintLevel > 0 && (
+          <p className="fill-card__hint">
+            💡 {getHintText()}
+            <span className="fill-card__hint-cost">
+              (−{HINT_COSTS.slice(0, hintLevel).reduce((a, b) => a + b, 0)} pts)
+            </span>
           </p>
         )}
       </div>
@@ -311,18 +432,20 @@ const FillEngine: React.FC<FillEngineProps> = ({
               value={userInput}
               onChange={e => setUserInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Escribe la palabra..."
+              placeholder={`Escribe la palabra (${current.answer.length} letras)...`}
               autoCapitalize="none"
               autoCorrect="off"
               autoComplete="off"
               spellCheck={false}
             />
             <div className="fill-input-actions">
-              {!showHint && (
-                <button className="fill-btn fill-btn--hint" onClick={() => setShowHint(true)}>
-                  💡 PISTA
-                </button>
-              )}
+              <button
+                className="fill-btn fill-btn--hint"
+                onClick={requestHint}
+                disabled={hintLevel >= 3}
+              >
+                <Eye size={16} /> PISTA {hintLevel > 0 ? `(${hintLevel}/3)` : ''}
+              </button>
               <button
                 className="fill-btn fill-btn--check"
                 onClick={checkAnswer}
@@ -334,7 +457,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
           </>
         ) : (
           <button className="fill-btn fill-btn--next" onClick={handleNext}>
-            {currentIndex + 1 >= totalSentences ? 'VER RESULTADOS' : 'SIGUIENTE'} <ArrowRight size={18} />
+            {idx + 1 >= totalItems ? 'VER RESULTADOS' : 'SIGUIENTE'} <ArrowRight size={18} />
           </button>
         )}
       </div>
@@ -343,7 +466,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
 };
 
 // ============================================================
-// ESTILOS
+// ESTILOS v2
 // ============================================================
 const fillStyles = `
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap');
@@ -351,6 +474,7 @@ const fillStyles = `
 .fill-engine {
   width: 100vw;
   min-height: 100vh;
+  min-height: 100dvh;
   background: linear-gradient(135deg, #0a0e27 0%, #1a1d3d 50%, #0f1428 100%);
   font-family: 'Space Mono', monospace;
   color: #fff;
@@ -381,33 +505,41 @@ const fillStyles = `
   justify-content: center;
   transition: all 0.2s;
 }
-.fill-header__btn:hover {
-  background: rgba(255,255,255,0.14);
-}
+.fill-header__btn:hover { background: rgba(255,255,255,0.14); }
 .fill-header__info {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.fill-header__phase {
-  font-size: 12px;
-  opacity: 0.6;
-}
+.fill-header__phase { font-size: 12px; opacity: 0.6; }
 .fill-header__block {
   font-family: 'Orbitron', sans-serif;
   font-size: 14px;
   font-weight: 700;
   color: #bf5af2;
 }
-.fill-header__score {
+.fill-header__score-area {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.fill-header__pts {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffd700;
+}
+.fill-header__tally {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.8);
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
 }
+.fill-header__icon--ok { color: #00ff87; }
+.fill-header__icon--err { color: #ff3d00; margin-left: 8px; }
 
 /* ── Progress ── */
 .fill-progress {
@@ -429,47 +561,10 @@ const fillStyles = `
   color: rgba(255,255,255,0.4);
 }
 
-/* ── Context: target ↔ antonym ── */
-.fill-context {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 20px 20px 10px;
-  flex-wrap: wrap;
-}
-.fill-context__pair {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  color: #bf5af2;
-  letter-spacing: 1px;
-}
-.fill-context__spanish {
-  font-size: 13px;
-  color: rgba(255,255,255,0.45);
-}
-.fill-context__audio {
-  background: rgba(191,90,242,0.15);
-  border: 1px solid rgba(191,90,242,0.3);
-  border-radius: 50%;
-  color: #bf5af2;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.fill-context__audio:hover {
-  background: rgba(191,90,242,0.25);
-}
-
 /* ── Sentence card ── */
 .fill-card {
-  margin: 12px 20px;
-  padding: 24px 20px;
+  margin: 20px 20px 12px;
+  padding: 28px 20px 24px;
   background: rgba(255,255,255,0.04);
   border: 2px solid rgba(255,255,255,0.08);
   border-radius: 20px;
@@ -478,7 +573,7 @@ const fillStyles = `
   display: flex;
   flex-direction: column;
   justify-content: center;
-  max-height: 320px;
+  animation: fadeIn 0.3s ease;
 }
 .fill-card--correct {
   border-color: #00ff87;
@@ -510,52 +605,106 @@ const fillStyles = `
 
 .fill-card__sentence {
   font-size: 20px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: rgba(255,255,255,0.9);
   text-align: center;
   word-break: break-word;
 }
 
+/* Hueco sin resolver */
 .fill-card__blank {
   display: inline-block;
-  min-width: 100px;
-  padding: 4px 12px;
+  min-width: 60px;
+  padding: 4px 10px;
   margin: 0 4px;
   border-bottom: 3px solid rgba(191,90,242,0.5);
   color: #bf5af2;
   font-weight: 700;
   font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
   text-align: center;
+  letter-spacing: 3px;
   transition: all 0.3s;
 }
-.fill-card__blank--correct {
-  border-color: #00ff87;
-  color: #00ff87;
+
+/* Respuesta revelada */
+.fill-card__answer {
+  display: inline-block;
+  padding: 4px 12px;
+  margin: 0 4px;
+  font-weight: 700;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  border-radius: 8px;
+  animation: bounceIn 0.4s ease;
 }
-.fill-card__blank--wrong {
-  border-color: #ff3d00;
+.fill-card__answer--correct {
+  color: #00ff87;
+  background: rgba(0,255,135,0.1);
+  border-bottom: 3px solid #00ff87;
+}
+.fill-card__answer--wrong {
   color: #ff3d00;
-  text-decoration: line-through;
+  background: rgba(255,61,0,0.1);
+  border-bottom: 3px solid #ff3d00;
 }
 
+/* Feedback extra */
+.fill-card__feedback-extra {
+  margin-top: 20px;
+  text-align: center;
+  animation: fadeIn 0.4s ease;
+}
+.fill-card__correct-answer {
+  font-size: 15px;
+  color: #ff3d00;
+  margin-bottom: 10px;
+}
+.fill-card__correct-answer strong {
+  color: #00ff87;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 1px;
+}
+.fill-card__spanish {
+  font-size: 15px;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.5;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+.fill-card__audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(191,90,242,0.15);
+  border: 1px solid rgba(191,90,242,0.3);
+  border-radius: 20px;
+  color: #bf5af2;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Space Mono', monospace;
+}
+.fill-card__audio-btn:hover { background: rgba(191,90,242,0.25); }
+
+/* Pista */
 .fill-card__hint {
   margin-top: 16px;
   text-align: center;
-  font-size: 14px;
-  color: rgba(255,255,255,0.5);
-  animation: fadeIn 0.3s ease;
-}
-
-.fill-card__correct-answer {
-  margin-top: 16px;
-  text-align: center;
   font-size: 15px;
-  color: #00ff87;
+  color: rgba(255,255,255,0.6);
   animation: fadeIn 0.3s ease;
-}
-.fill-card__correct-answer strong {
   font-family: 'Orbitron', sans-serif;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+}
+.fill-card__hint-cost {
+  display: block;
+  font-size: 11px;
+  color: #ff3d00;
+  margin-top: 4px;
+  letter-spacing: 0;
+  font-family: 'Space Mono', monospace;
 }
 
 /* ── Input area ── */
@@ -587,6 +736,7 @@ const fillStyles = `
 }
 .fill-input::placeholder {
   color: rgba(255,255,255,0.25);
+  font-size: 14px;
 }
 
 .fill-input-actions {
@@ -620,10 +770,9 @@ const fillStyles = `
   border: 1px solid rgba(255,255,255,0.15);
   flex: 0;
   white-space: nowrap;
+  font-size: 12px;
 }
-.fill-btn--hint:hover {
-  background: rgba(255,255,255,0.12);
-}
+.fill-btn--hint:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
 .fill-btn--check {
   background: linear-gradient(135deg, #bf5af2, #da8fff);
   color: #fff;
@@ -649,9 +798,10 @@ const fillStyles = `
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 40px 20px;
   text-align: center;
-  gap: 24px;
+  gap: 20px;
 }
 .fill-results__trophy {
   color: #ffd700;
@@ -659,7 +809,7 @@ const fillStyles = `
 }
 .fill-results__title {
   font-family: 'Orbitron', sans-serif;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 900;
   background: linear-gradient(135deg, #bf5af2, #da8fff);
   -webkit-background-clip: text;
@@ -681,7 +831,7 @@ const fillStyles = `
 }
 .fill-results__stats {
   display: flex;
-  gap: 32px;
+  gap: 28px;
 }
 .fill-results__stat {
   display: flex;
@@ -691,21 +841,25 @@ const fillStyles = `
 }
 .fill-results__stat-val {
   font-family: 'Orbitron', sans-serif;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 900;
   color: #bf5af2;
 }
 .fill-results__stat-label {
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255,255,255,0.5);
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+.fill-results__max {
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
 }
 .fill-results__actions {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 12px;
   width: 100%;
   max-width: 320px;
 }
@@ -755,18 +909,12 @@ const fillStyles = `
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
-  .fill-card__sentence {
-    font-size: 17px;
-  }
-  .fill-context__pair {
-    font-size: 14px;
-  }
-  .fill-results__stat-val {
-    font-size: 24px;
-  }
-  .fill-results__title {
-    font-size: 22px;
-  }
+  .fill-card__sentence { font-size: 17px; }
+  .fill-card__blank { font-size: 16px; letter-spacing: 2px; }
+  .fill-card__answer { font-size: 18px; }
+  .fill-results__stat-val { font-size: 22px; }
+  .fill-results__title { font-size: 20px; }
+  .fill-header__pts { font-size: 14px; }
 }
 `;
 
