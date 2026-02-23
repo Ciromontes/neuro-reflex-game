@@ -81,16 +81,25 @@ function blanks(answer: string): string {
 }
 
 /**
- * Reemplaza TODOS los _____ por las palabras de la respuesta.
- * "Don't _____ _____ on your dreams" + "give up" → "Don't give up on your dreams"
+ * Reemplaza los _____ por la respuesta.
+ * - Si hay 1 solo hueco: inserta la frase completa (ej: "pick up").
+ * - Si hay varios huecos: reemplaza uno por uno con cada palabra.
+ * Esto evita que completeSentence tenga _____ sobrantes que el TTS lee como "underscore".
  */
 function fillBlanks(text: string, answer: string): string {
+  const blanksCount = (text.match(/_____/g) || []).length;
+  if (blanksCount <= 1) {
+    // Un solo hueco → insertar respuesta completa
+    return text.replace('_____', answer);
+  }
+  // Múltiples huecos → rellenar uno a uno por palabra
   const words = answer.split(' ');
   let result = text;
   for (const w of words) {
     result = result.replace('_____', w);
   }
-  return result;
+  // Si sobran huecos sin rellenar (más blancos que palabras), eliminarlos
+  return result.replace(/_____/g, '');
 }
 
 /**
@@ -187,7 +196,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
   const [wrongCount, setWrongCount] = useState(0);
   const [hintLevel, setHintLevel] = useState(0); // 0 = sin pista, 1..3
   const [completed, setCompleted] = useState(false);
-  const [showSpanish, setShowSpanish] = useState(false); // toggle español
+  const [spanishRevealed, setSpanishRevealed] = useState(false); // ver traducción ANTES de responder (−5 pts)
 
   const inputRef = useRef<HTMLInputElement>(null);
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -239,12 +248,13 @@ const FillEngine: React.FC<FillEngineProps> = ({
     if (hintLevel < 3) setHintLevel(h => h + 1);
   }, [hintLevel]);
 
-  // Puntos para la frase actual
+  // Puntos para la frase actual (pistas + penalización por ver español)
   const pointsForCurrent = useCallback((): number => {
     let pts = MAX_PTS_PER_ITEM;
     for (let i = 0; i < hintLevel; i++) pts -= HINT_COSTS[i];
+    if (spanishRevealed) pts -= 5;
     return Math.max(0, pts);
-  }, [hintLevel]);
+  }, [hintLevel, spanishRevealed]);
 
   // ── Validar ───────────────────────────────────────────────
   const checkAnswer = useCallback(() => {
@@ -284,7 +294,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
       setUserInput('');
       setFeedback(null);
       setHintLevel(0);
-      setShowSpanish(false);
+      setSpanishRevealed(false);
     }
   }, [idx, queue.length, score, onBlockComplete]);
 
@@ -312,7 +322,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
     setCorrectCount(0);
     setWrongCount(0);
     setHintLevel(0);
-    setShowSpanish(false);
+    setSpanishRevealed(false);
     setCompleted(false);
   };
 
@@ -413,7 +423,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
         <span className="fill-progress__text">{idx + 1} / {totalItems}</span>
       </div>
 
-      {/* Sentence card — Paso 2: guiones = nº caracteres */}
+      {/* Sentence card */}
       <div className={`fill-card ${feedback === 'correct' ? 'fill-card--correct' : feedback === 'wrong' ? 'fill-card--wrong' : ''}`}>
         {!feedback && (
           <div className="fill-card__type-badge">
@@ -425,7 +435,7 @@ const FillEngine: React.FC<FillEngineProps> = ({
 
         <p className="fill-card__sentence">
           {feedback ? (
-            // Tras responder: frase COMPLETA en inglés
+            // Tras responder: frase COMPLETA en inglés (coloreada)
             <>
               {parts[0]}
               <span className={`fill-card__answer ${feedback === 'correct' ? 'fill-card__answer--correct' : 'fill-card__answer--wrong'}`}>
@@ -445,7 +455,23 @@ const FillEngine: React.FC<FillEngineProps> = ({
           )}
         </p>
 
-        {/* Feedback — respuesta correcta si falló + botón español + audio */}
+        {/* PRE-RESPUESTA: traducción en español como opción opcional (−5 pts) */}
+        {!feedback && (
+          spanishRevealed ? (
+            <p className="fill-card__spanish fill-card__spanish--pre">
+              🇪🇸 {current.spanishText}
+            </p>
+          ) : (
+            <button
+              className="fill-card__spanish-toggle"
+              onClick={() => setSpanishRevealed(true)}
+            >
+              🇪🇸 Ver en español (−5 pts)
+            </button>
+          )
+        )}
+
+        {/* POST-RESPUESTA: siempre visible — corrección + español + audio */}
         {feedback && (
           <div className="fill-card__feedback-extra">
             {feedback === 'wrong' && (
@@ -453,32 +479,20 @@ const FillEngine: React.FC<FillEngineProps> = ({
                 Respuesta correcta: <strong>{current.answer}</strong>
               </p>
             )}
-
-            {/* Español como toggle — cuesta 5 pts */}
-            {showSpanish ? (
-              <p className="fill-card__spanish">
-                🇪🇸 {current.spanishText}
-              </p>
-            ) : (
-              <button
-                className="fill-card__spanish-toggle"
-                onClick={() => { setShowSpanish(true); setScore(s => Math.max(0, s - 5)); }}
-              >
-                🇪🇸 Ver en español (−5 pts)
-              </button>
-            )}
-
+            <p className="fill-card__spanish">
+              🇪🇸 {current.spanishText}
+            </p>
             <button
               className="fill-card__audio-btn"
               onClick={() => speakEn(current.completeSentence)}
-              title="Escuchar"
+              title="Escuchar frase completa"
             >
               <Volume2 size={18} /> Escuchar
             </button>
           </div>
         )}
 
-        {/* Paso 5: pista progresiva */}
+        {/* Pista progresiva (solo antes de responder) */}
         {!feedback && hintLevel > 0 && (
           <p className="fill-card__hint">
             💡 {getHintText()}
@@ -739,6 +753,15 @@ const fillStyles = `
   line-height: 1.5;
   margin-bottom: 12px;
   font-style: italic;
+}
+/* Spanish shown BEFORE answering — subtler, above the hint area */
+.fill-card__spanish--pre {
+  margin-top: 16px;
+  margin-bottom: 0;
+  text-align: center;
+  font-size: 14px;
+  color: rgba(255,215,0,0.75);
+  animation: fadeIn 0.3s ease;
 }
 .fill-card__audio-btn {
   display: inline-flex;
